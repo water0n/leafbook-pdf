@@ -747,21 +747,25 @@ class Flipbook_Apariencia {
                 . '#fbm-wrap-' . $post_id . ' .fbm-area-principal,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-visor-wrap,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-visor,'
-                . '#fbm-wrap-' . $post_id . ' .fbm-cargando{background:transparent!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-cargando,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-controles,'
-                . '#fbm-wrap-' . $post_id . ' .fbm-info-bar{background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-info-bar,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-panel-miniaturas,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-search-resultados{background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-panel-miniaturas.fbm-miniaturas--visible{border-color:transparent!important;}'
             : '';
 
+        $barra_css = $tipo === 'sin_fondo' ? 'transparent' : $barra;
         $sombra_css = $sombra ? 'box-shadow:0 16px 48px rgba(0,0,0,.35)' : 'box-shadow:none';
 
         return '<style>'
             . '#fbm-wrap-' . $post_id . '{border-radius:' . $rad . 'px;' . $sombra_css . '}'
-            . $transparencia_css
             . '#fbm-wrap-' . $post_id . ' .fbm-visor,'
             . '#fbm-wrap-' . $post_id . ' .fbm-cargando{' . $fondo . '}'
-            . '#fbm-wrap-' . $post_id . ' .fbm-controles{background:' . $barra . '}'
+            . '#fbm-wrap-' . $post_id . ' .fbm-controles{background:' . $barra_css . '}'
             . '#fbm-wrap-' . $post_id . ' .fbm-btn{background:' . $btn . '!important;color:' . $btntx . '!important;}'
             . '#fbm-wrap-' . $post_id . ' .fbm-btn:hover{background:' . $hover . '!important;}'
+            . $transparencia_css
             . '</style>';
     }
 }
