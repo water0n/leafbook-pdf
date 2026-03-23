@@ -209,6 +209,12 @@
     overflow:        hidden;
 }
 
+.fbm-libro {
+    width:            100%;
+    transition:       transform 0.2s ease;
+    transform-origin: center top;
+}
+
 /* Canvas del efecto flip */
 .fbm-visor canvas {
     display:    block;

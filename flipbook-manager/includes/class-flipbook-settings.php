@@ -229,10 +229,11 @@ class Flipbook_Settings {
                                 <option value="color"     <?php selected($tipo,'color');     ?>>Color sólido</option>
                                 <option value="degradado" <?php selected($tipo,'degradado'); ?>>Degradado</option>
                                 <option value="imagen"    <?php selected($tipo,'imagen');    ?>>Imagen (URL)</option>
+                                <option value="sin_fondo" <?php selected($tipo,'sin_fondo'); ?>>Sin fondo</option>
                             </select>
                         </td>
                     </tr>
-                    <tr id="lbpdf-fila-c1">
+                    <tr id="lbpdf-fila-c1" style="<?php echo $tipo === 'sin_fondo' ? 'display:none' : ''; ?>">
                         <th>Color principal</th>
                         <td><input type="color" name="<?php echo self::OPCION; ?>[fondo_color]" value="<?php echo esc_attr($this->val('fondo_color','#1a2234')); ?>"></td>
                     </tr>
@@ -353,8 +354,9 @@ class Flipbook_Settings {
         // ── Toggle filas de fondo
         function lbpdfToggleFondo() {
             var v = document.getElementById('lbpdf_fondo_tipo').value;
+            document.getElementById('lbpdf-fila-c1').style.display  = v === 'sin_fondo'  ? 'none' : '';
             document.getElementById('lbpdf-fila-c2').style.display  = v === 'degradado' ? '' : 'none';
-            document.getElementById('lbpdf-fila-img').style.display  = v === 'imagen'    ? '' : 'none';
+            document.getElementById('lbpdf-fila-img').style.display = v === 'imagen'    ? '' : 'none';
         }
         // ── Iframe
         function lbpdfIframe() {
@@ -405,12 +407,18 @@ class Flipbook_Settings {
 
         if      ($tipo === 'degradado')         $fondo = 'background:linear-gradient(135deg,' . $c1 . ',' . $c2 . ');';
         elseif  ($tipo === 'imagen' && $img)    $fondo = 'background:url(' . esc_url($img) . ') center/cover no-repeat; background-color:' . $c1 . ';';
+        elseif  ($tipo === 'sin_fondo')         $fondo = 'background:transparent;';
         else                                    $fondo = 'background:' . $c1 . ';';
+
+        $transparencia_css = $tipo === 'sin_fondo'
+            ? '.fbm-contenedor-externo,.fbm-area-principal,.fbm-visor-wrap,.fbm-visor,.fbm-cargando{background:transparent!important;}'
+            : '';
 
         $sombra_css = $sombra ? 'box-shadow:0 20px 60px rgba(0,0,0,.45);' : 'box-shadow:none;';
 
         echo '<style id="lbpdf-estilos">
 .fbm-contenedor-externo{border-radius:' . $rad . 'px!important;' . $sombra_css . '}
+' . $transparencia_css . '
 .fbm-visor,.fbm-cargando{' . $fondo . '}
 .fbm-controles{background:' . $barra . '!important;}
 .fbm-btn{background:' . $btn . '!important;color:' . $btntx . '!important;}
@@ -421,8 +429,12 @@ class Flipbook_Settings {
     // SANITIZAR
     // ============================================================
     public function sanitizar($i) {
+        $fondo_tipo = isset($i['fondo_tipo']) && in_array($i['fondo_tipo'], array('color', 'degradado', 'imagen', 'sin_fondo'), true)
+            ? $i['fondo_tipo']
+            : 'color';
+
         return array(
-            'fondo_tipo'       => sanitize_text_field(  $i['fondo_tipo']       ?? 'color'   ),
+            'fondo_tipo'       => $fondo_tipo,
             'fondo_color'      => sanitize_hex_color(   $i['fondo_color']      ?? '#1a2234' ),
             'fondo_color2'     => sanitize_hex_color(   $i['fondo_color2']     ?? '#111827' ),
             'fondo_imagen_url' => esc_url_raw(          $i['fondo_imagen_url'] ?? ''        ),

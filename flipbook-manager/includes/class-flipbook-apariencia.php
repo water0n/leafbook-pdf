@@ -53,9 +53,11 @@ class Flipbook_Apariencia {
 
     // ── Obtiene la config de un PDF (merge defaults) ───────────
     public static function get( $post_id ) {
+        $globales = get_option( class_exists('Flipbook_Settings') ? Flipbook_Settings::OPCION : 'lbpdf_ajustes', array() );
         $guardado = get_post_meta( $post_id, self::META_KEY, true );
+        if ( ! is_array($globales) ) $globales = array();
         if ( ! is_array($guardado) ) $guardado = array();
-        return array_merge( self::defaults(), $guardado );
+        return array_merge( self::defaults(), $globales, $guardado );
     }
 
     public function register() {
@@ -274,9 +276,10 @@ class Flipbook_Apariencia {
                     <div class="lap-fondo-tipo">
                         <?php
                         $tipos = array(
-                            'color'    => array('🟦', 'Color sólido'),
-                            'degradado'=> array('🌈', 'Degradado'),
-                            'imagen'   => array('🖼', 'Imagen'),
+                            'color'     => array('🟦', 'Color sólido'),
+                            'degradado' => array('🌈', 'Degradado'),
+                            'imagen'    => array('🖼', 'Imagen'),
+                            'sin_fondo' => array('⬜', 'Sin fondo'),
                         );
                         foreach ( $tipos as $val => list($ico, $lbl) ) : ?>
                         <div class="lap-radio-opt">
@@ -296,7 +299,7 @@ class Flipbook_Apariencia {
 
                 <div class="lap-colores">
                     <!-- Color principal -->
-                    <div class="lap-color-item">
+                    <div class="lap-color-item lap-fila-condicional <?php echo $cfg['fondo_tipo']!=='sin_fondo'?'vis':''; ?>" id="lap-fila-c1">
                         <label>Color del visor</label>
                         <div class="lap-color-row">
                             <input type="color" id="lap-c-fondo" value="<?php echo esc_attr($cfg['fondo_color']); ?>"
@@ -446,7 +449,8 @@ class Flipbook_Apariencia {
             window.lapToggleFondo = function() {
                 var tipo = document.querySelector('input[name="lbpdf_ap[fondo_tipo]"]:checked');
                 if (!tipo) return;
-                document.getElementById('lap-fila-c2').classList.toggle('vis',  tipo.value === 'degradado');
+                document.getElementById('lap-fila-c1').classList.toggle('vis', tipo.value !== 'sin_fondo');
+                document.getElementById('lap-fila-c2').classList.toggle('vis', tipo.value === 'degradado');
                 document.getElementById('lap-fila-img').classList.toggle('vis', tipo.value === 'imagen');
             };
 
@@ -502,6 +506,11 @@ class Flipbook_Apariencia {
                     if (k === 'fondo_tipo') {
                         var r = document.getElementById('lap-ft-' + v);
                         if (r) { r.checked = true; lapToggleFondo(); }
+                    }
+                    // Tema de botones
+                    if (k === 'tema_botones') {
+                        var tema = document.querySelector('input[name="lbpdf_ap[tema_botones]"][value="' + v + '"]');
+                        if (tema) { tema.checked = true; lapAplicarTema(tema); }
                     }
                     // Range radio_bordes
                     if (k === 'radio_bordes') {
@@ -618,7 +627,8 @@ class Flipbook_Apariencia {
             $clean[$k] = isset($raw[$k]) ? sanitize_hex_color($raw[$k]) ?? $def[$k] : $def[$k];
         }
         // Textos simples
-        $clean['fondo_tipo'] = isset($raw['fondo_tipo']) && in_array($raw['fondo_tipo'],array('color','degradado','imagen')) ? $raw['fondo_tipo'] : 'color';
+        $clean['fondo_tipo'] = isset($raw['fondo_tipo']) && in_array($raw['fondo_tipo'], array('color', 'degradado', 'imagen', 'sin_fondo'), true ) ? $raw['fondo_tipo'] : 'color';
+        $clean['tema_botones'] = isset($raw['tema_botones']) && in_array($raw['tema_botones'], array('oscuro', 'claro', 'azul', 'verde', 'rojo', 'transparente'), true ) ? $raw['tema_botones'] : $def['tema_botones'];
         // URL
         $clean['fondo_imagen_url'] = isset($raw['fondo_imagen_url']) ? esc_url_raw($raw['fondo_imagen_url']) : '';
         // Número
@@ -729,12 +739,22 @@ class Flipbook_Apariencia {
 
         if      ($tipo === 'degradado')          $fondo = 'background:linear-gradient(135deg,' . $c1 . ',' . $c2 . ')';
         elseif  ($tipo === 'imagen' && $img)     $fondo = 'background:url(' . esc_url($img) . ') center/cover no-repeat;background-color:' . $c1;
+        elseif  ($tipo === 'sin_fondo')          $fondo = 'background:transparent';
         else                                     $fondo = 'background:' . $c1;
+
+        $transparencia_css = $tipo === 'sin_fondo'
+            ? '#fbm-wrap-' . $post_id . '{background:transparent!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-area-principal,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-visor-wrap,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-visor,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-cargando{background:transparent!important;}'
+            : '';
 
         $sombra_css = $sombra ? 'box-shadow:0 16px 48px rgba(0,0,0,.35)' : 'box-shadow:none';
 
         return '<style>'
             . '#fbm-wrap-' . $post_id . '{border-radius:' . $rad . 'px;' . $sombra_css . '}'
+            . $transparencia_css
             . '#fbm-wrap-' . $post_id . ' .fbm-visor,'
             . '#fbm-wrap-' . $post_id . ' .fbm-cargando{' . $fondo . '}'
             . '#fbm-wrap-' . $post_id . ' .fbm-controles{background:' . $barra . '}'

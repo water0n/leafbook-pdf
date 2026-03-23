@@ -1,15 +1,12 @@
 /**
- * visor.js — LeafBook PDF v1.4.6
+ * visor.js — LeafBook PDF v1.4.7
  *
  * FIXES:
- *  1. Pre-carga real de imágenes: crea objetos Image() y espera el evento onload
- *     de CADA UNO antes de llamar fb.loadFromImages(). StPageFlip 2.0.7 revisa
- *     image.complete en el momento de la llamada — si el browser aún no ha
- *     decodificado el data-URL (pasa en Chrome/Firefox con imágenes pesadas),
- *     la página queda en blanco aunque la imagen exista.
+ *  1. El flipbook se monta sobre un contenedor HTML real y
+ *     loadFromImages() recibe data-URLs (string[]) como espera StPageFlip.
  *
- *  2. Double-rAF para garantizar layout antes de instanciar StPageFlip,
- *     con autoSize:false (requerido cuando size:'fixed').
+ *  2. Se conserva una precarga ligera y luego se instancia el libro con
+ *     double-rAF para asegurar layout estable.
  *
  *  3. fbmIniciarTodos() idempotente invocada desde wp_add_inline_script al footer.
  */
@@ -73,14 +70,13 @@
             return renderTodas(doc, total, ancho, alto, id);
         })
         .then(function (dataUrls) {
-            // FIX PRINCIPAL: pre-cargar TODOS los Image() y esperar onload antes de
-            // pasarlos a StPageFlip. Con data-URLs de alta resolución, el browser
-            // puede no haber decodificado la imagen cuando StPageFlip revisa .complete.
+            // Calienta la decodificación del browser, pero el flipbook recibe
+            // string[] porque StPageFlip espera rutas/data-URLs.
             setTxt(id, 'Preparando páginas…');
             return precargarImagenes(dataUrls, id);
         })
-        .then(function (imgObjects) {
-            crearFlipbook(id, imgObjects, ancho, alto, elVisor, datos);
+        .then(function (imageSources) {
+            crearFlipbook(id, imageSources, ancho, alto, elVisor, datos);
         })
         .catch(function (e) {
             console.error('[LeafBook PDF]', e);
@@ -95,8 +91,8 @@
 
     // ══════════════════════════════════════════════════════
     // PRE-CARGA DE IMÁGENES
-    // Crea objetos HTMLImageElement y espera onload de cada uno.
-    // StPageFlip usa image.complete en loadFromImages — si es false, página en blanco.
+    // Calienta la decodificación del browser, pero loadFromImages() debe
+    // recibir string[] porque StPageFlip crea internamente sus Image().
     // ══════════════════════════════════════════════════════
     function precargarImagenes(dataUrls, id) {
         var total = dataUrls.length;
@@ -108,12 +104,12 @@
                 img.onload = function () {
                     cargadas++;
                     setProg(id, Math.round(90 + (cargadas / total) * 9));
-                    resolve(img);
+                    resolve(src);
                 };
                 img.onerror = function () {
                     // Si falla un decode, igual resolvemos para no bloquear todo
                     console.warn('[LeafBook PDF] Error precargando imagen', idx);
-                    resolve(img);
+                    resolve(src);
                 };
                 img.src = src;
             });
@@ -163,7 +159,7 @@
     // ══════════════════════════════════════════════════════
     // CREAR FLIPBOOK
     // ══════════════════════════════════════════════════════
-    function crearFlipbook(id, imgObjects, ancho, alto, elVisor, datos) {
+    function crearFlipbook(id, imageSources, ancho, alto, elVisor, datos) {
         setProg(id, 99);
 
         var spin = document.getElementById('fbm-cargando-' + id);
@@ -171,19 +167,21 @@
 
         var anchoPag = Math.floor(ancho / 2);
 
-        // Asignar dimensiones en píxeles ANTES de insertar el canvas en el DOM
-        var cv    = document.createElement('canvas');
-        cv.id     = 'fbm-canvas-' + id;
-        cv.width  = anchoPag;
-        cv.height = alto;
-        cv.style.cssText = 'display:block;width:' + anchoPag + 'px;height:' + alto + 'px;';
-        elVisor.appendChild(cv);
+        var libroExistente = document.getElementById('fbm-book-' + id);
+        if (libroExistente) libroExistente.remove();
+
+        // StPageFlip necesita un elemento HTML raíz, no un canvas manual.
+        var book = document.createElement('div');
+        book.id = 'fbm-book-' + id;
+        book.className = 'fbm-libro';
+        book.style.cssText = 'position:relative;width:100%;max-width:' + ancho + 'px;height:' + alto + 'px;margin:0 auto;';
+        elVisor.appendChild(book);
 
         // Double rAF: garantiza layout completo antes de que StPageFlip lea getBoundingClientRect
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
 
-                var fb = new St.PageFlip(cv, {
+                var fb = new St.PageFlip(book, {
                     width:               anchoPag,
                     height:              alto,
                     size:                'fixed',
@@ -197,31 +195,31 @@
                     startZIndex:         0,
                 });
 
-                // Pasar los objetos Image pre-cargados (complete=true garantizado)
-                fb.loadFromImages(imgObjects);
+                fb.loadFromImages(imageSources);
 
                 instancias[id] = {
                     flipBook:     fb,
-                    imagenes:     imgObjects,
+                    imagenes:     imageSources,
+                    libroEl:      book,
                     zoom:         1,
-                    totalPaginas: imgObjects.length,
+                    totalPaginas: imageSources.length,
                     ancho:        ancho,
                     alto:         alto,
                 };
 
                 fb.on('flip', function (e) {
-                    setInfo(id, 'Pág. ' + (e.data + 1) + ' / ' + imgObjects.length);
+                    setInfo(id, 'Pág. ' + (e.data + 1) + ' / ' + imageSources.length);
                     resaltarMiniatura(id, e.data);
                 });
 
                 fb.on('init', function () {
-                    setInfo(id, 'Pág. 1 / ' + imgObjects.length);
+                    setInfo(id, 'Pág. 1 / ' + imageSources.length);
                     setProg(id, 100);
                     setTimeout(function () {
                         var b = document.getElementById('fbm-progreso-' + id);
                         if (b) b.style.opacity = '0';
                     }, 500);
-                    buildMiniaturas(id, imgObjects);
+                    buildMiniaturas(id, imageSources);
 
                     if (datos.autoplay === '1') {
                         var ap = setInterval(function () {
@@ -319,6 +317,18 @@
     // ══════════════════════════════════════════════════════
     var niveles = [0.5, 0.6, 0.75, 1, 1.25, 1.5, 2];
 
+    function getLibroEl(id) {
+        return document.getElementById('fbm-book-' + id);
+    }
+
+    function refrescarFlipbook(id) {
+        var inst = instancias[id];
+        if (!inst || !inst.flipBook || typeof inst.flipBook.update !== 'function') return;
+        requestAnimationFrame(function () {
+            inst.flipBook.update();
+        });
+    }
+
     function hacerZoom(id, dir) {
         var inst = instancias[id];
         if (!inst) return;
@@ -327,11 +337,11 @@
         idx = Math.max(0, Math.min(niveles.length - 1, idx + dir));
         inst.zoom = niveles[idx];
 
-        var cv = document.getElementById('fbm-canvas-' + id);
-        if (cv) {
-            cv.style.transform       = 'scale(' + inst.zoom + ')';
-            cv.style.transformOrigin = 'center top';
-            cv.style.transition      = 'transform 0.2s ease';
+        var book = getLibroEl(id);
+        if (book) {
+            book.style.transform       = 'scale(' + inst.zoom + ')';
+            book.style.transformOrigin = 'center top';
+            book.style.transition      = 'transform 0.2s ease';
         }
         var visorEl = document.getElementById('fbm-visor-' + id);
         if (visorEl) visorEl.style.height = Math.round(inst.alto * inst.zoom) + 'px';
@@ -350,6 +360,7 @@
         var abierto = panel.classList.toggle('fbm-miniaturas--visible');
         panel.setAttribute('aria-hidden', abierto ? 'false' : 'true');
         if (btn) btn.classList.toggle('fbm-btn--activo', abierto);
+        setTimeout(function () { refrescarFlipbook(id); }, 260);
     }
 
     // ══════════════════════════════════════════════════════
@@ -382,8 +393,9 @@
                     var inst = instancias[id2];
                     if (!inst) return;
                     v.style.height = inst.alto + 'px';
-                    var cv = document.getElementById('fbm-canvas-' + id2);
-                    if (cv) cv.style.transform = 'scale(' + inst.zoom + ')';
+                    var book = getLibroEl(id2);
+                    if (book) book.style.transform = 'scale(' + inst.zoom + ')';
+                    refrescarFlipbook(id2);
                 });
             }
         });
