@@ -1,5 +1,5 @@
 /**
- * visor.js — LeafBook PDF v1.4.7
+ * visor.js — LeafBook PDF v1.4.8
  *
  * FIXES:
  *  1. El flipbook se monta sobre un contenedor HTML real y
@@ -15,6 +15,16 @@
 
     var instancias = window._lbInstancias = window._lbInstancias || {};
     var iniciados  = {};
+
+    if (!window._lbResizeBound) {
+        window._lbResizeBound = true;
+        window.addEventListener('resize', function () {
+            window.clearTimeout(window._lbResizeTimer);
+            window._lbResizeTimer = window.setTimeout(function () {
+                Object.keys(instancias).forEach(function (id) { refrescarFlipbook(id); });
+            }, 80);
+        });
+    }
 
     window.fbmIniciarTodos = function () {
         document.querySelectorAll('.fbm-visor').forEach(function (elVisor) {
@@ -174,21 +184,28 @@
         var book = document.createElement('div');
         book.id = 'fbm-book-' + id;
         book.className = 'fbm-libro';
-        book.style.cssText = 'position:relative;width:100%;max-width:' + ancho + 'px;height:' + alto + 'px;margin:0 auto;';
+        book.style.cssText = 'position:relative;width:100%;max-width:' + ancho + 'px;margin:0 auto;';
         elVisor.appendChild(book);
 
         // Double rAF: garantiza layout completo antes de que StPageFlip lea getBoundingClientRect
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
 
+                var minPageWidth  = Math.max(160, Math.round(anchoPag * 0.42));
+                var minPageHeight = Math.max(220, Math.round(alto * (minPageWidth / anchoPag)));
+
                 var fb = new St.PageFlip(book, {
                     width:               anchoPag,
                     height:              alto,
-                    size:                'fixed',
+                    size:                'stretch',
+                    minWidth:            minPageWidth,
+                    maxWidth:            anchoPag,
+                    minHeight:           minPageHeight,
+                    maxHeight:           alto,
                     drawShadow:          true,
                     flippingTime:        600,
                     usePortrait:         true,
-                    autoSize:            false,   // con size:'fixed', autoSize debe ser false
+                    autoSize:            true,
                     maxShadowOpacity:    0.4,
                     showCover:           true,
                     mobileScrollSupport: false,
@@ -220,6 +237,7 @@
                         if (b) b.style.opacity = '0';
                     }, 500);
                     buildMiniaturas(id, imageSources);
+                    refrescarFlipbook(id);
 
                     if (datos.autoplay === '1') {
                         var ap = setInterval(function () {
@@ -321,11 +339,36 @@
         return document.getElementById('fbm-book-' + id);
     }
 
+    function actualizarVista(id) {
+        var inst = instancias[id];
+        if (!inst) return;
+
+        var book = getLibroEl(id);
+        var visorEl = document.getElementById('fbm-visor-' + id);
+        var bounds = inst.flipBook && typeof inst.flipBook.getBoundsRect === 'function'
+            ? inst.flipBook.getBoundsRect()
+            : null;
+        var altoBase = bounds && bounds.height ? bounds.height : inst.alto;
+
+        if (book) {
+            book.style.transform = 'scale(' + inst.zoom + ')';
+            book.style.transformOrigin = 'center top';
+            book.style.transition = 'transform 0.2s ease';
+        }
+
+        if (visorEl) {
+            visorEl.style.height = Math.round(altoBase * inst.zoom) + 'px';
+        }
+    }
+
     function refrescarFlipbook(id) {
         var inst = instancias[id];
         if (!inst || !inst.flipBook || typeof inst.flipBook.update !== 'function') return;
         requestAnimationFrame(function () {
             inst.flipBook.update();
+            requestAnimationFrame(function () {
+                actualizarVista(id);
+            });
         });
     }
 
@@ -337,14 +380,7 @@
         idx = Math.max(0, Math.min(niveles.length - 1, idx + dir));
         inst.zoom = niveles[idx];
 
-        var book = getLibroEl(id);
-        if (book) {
-            book.style.transform       = 'scale(' + inst.zoom + ')';
-            book.style.transformOrigin = 'center top';
-            book.style.transition      = 'transform 0.2s ease';
-        }
-        var visorEl = document.getElementById('fbm-visor-' + id);
-        if (visorEl) visorEl.style.height = Math.round(inst.alto * inst.zoom) + 'px';
+        actualizarVista(id);
 
         var zEl = document.getElementById('fbm-zoom-' + id);
         if (zEl) zEl.textContent = Math.round(inst.zoom * 100) + '%';
@@ -387,17 +423,13 @@
                 btn.classList.toggle('fs-activo', esFS);
                 btn.title = esFS ? 'Salir de pantalla completa' : 'Pantalla completa (F)';
             });
-            if (!esFS) {
-                document.querySelectorAll('.fbm-visor').forEach(function(v) {
-                    var id2  = v.dataset.id;
-                    var inst = instancias[id2];
-                    if (!inst) return;
-                    v.style.height = inst.alto + 'px';
-                    var book = getLibroEl(id2);
-                    if (book) book.style.transform = 'scale(' + inst.zoom + ')';
-                    refrescarFlipbook(id2);
-                });
-            }
+            document.querySelectorAll('.fbm-visor').forEach(function(v) {
+                var id2  = v.dataset.id;
+                var inst = instancias[id2];
+                if (!inst) return;
+                if (!esFS) v.style.height = inst.alto + 'px';
+                refrescarFlipbook(id2);
+            });
         });
     });
 

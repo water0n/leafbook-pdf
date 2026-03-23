@@ -295,11 +295,55 @@
     .fbm-controles {
         gap: 4px;
         padding: 6px 8px;
+        justify-content: center;
     }
-    .fbm-ctrl-herramientas .fbm-zoom-nivel { display: none; }
-    .fbm-btn { padding: 5px 9px; font-size: 13px; }
-    .fbm-panel-miniaturas.fbm-miniaturas--visible { width: 110px; }
-    .fbm-visor { height: 380px !important; }
+    .fbm-ctrl-grupo {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    .fbm-ctrl-buscar {
+        width: 100%;
+        flex-basis: 100%;
+    }
+    .fbm-search-wrap {
+        max-width: none;
+        width: 100%;
+    }
+    .fbm-zoom-nivel {
+        min-width: auto;
+    }
+    .fbm-btn {
+        padding: 5px 9px;
+        font-size: 13px;
+    }
+    .fbm-area-principal {
+        flex-direction: column;
+    }
+    .fbm-panel-miniaturas {
+        width: 100%;
+        max-height: 0;
+        border-right: none;
+        border-bottom: 1px solid transparent;
+        transition: max-height 0.25s ease;
+    }
+    .fbm-panel-miniaturas.fbm-miniaturas--visible {
+        width: 100%;
+        max-height: 160px;
+        border-bottom-color: rgba(255,255,255,0.08);
+    }
+    .fbm-miniaturas-grid {
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 6px;
+    }
+    .fbm-miniatura {
+        flex: 0 0 86px;
+    }
+    .fbm-visor {
+        min-height: 240px;
+        height: auto !important;
+    }
 }
 
 /* ════════════════════════════════════════════════════════
