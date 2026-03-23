@@ -1,5 +1,5 @@
 /**
- * visor.js — LeafBook PDF v1.4.13
+ * visor.js — LeafBook PDF v1.4.14
  *
  * FIXES:
  *  1. El flipbook se monta sobre un contenedor HTML real y
@@ -55,6 +55,8 @@
 
         var ancho = parseInt(datos.ancho, 10) || 900;
         var alto  = parseInt(datos.alto,  10) || 600;
+        var calidadRender = Math.min(1, Math.max(0.5, parseFloat(datos.calidad) || 0.85));
+        var escalaRender  = Math.min(3, Math.max(1, parseFloat(datos.escala) || 1.5));
 
         setProg(id, 5);
         setTxt(id, 'Conectando…');
@@ -77,7 +79,7 @@
             var total = doc.numPages;
             setTxt(id, 'Procesando ' + total + ' páginas…');
             if (datos.buscar === '1') fbmIndexarTexto(id, doc);
-            return renderTodas(doc, total, ancho, alto, id);
+            return renderTodas(doc, total, ancho, alto, id, { calidad: calidadRender, escala: escalaRender, zoomMax: 2 });
         })
         .then(function (dataUrls) {
             // Calienta la decodificación del browser, pero el flipbook recibe
@@ -129,7 +131,7 @@
     // ══════════════════════════════════════════════════════
     // RENDERIZAR PÁGINAS → array de data URLs
     // ══════════════════════════════════════════════════════
-    function renderTodas(doc, total, anchoVisor, altoVisor, id) {
+    function renderTodas(doc, total, anchoVisor, altoVisor, id, renderCfg) {
         var imgs     = [];
         var chain    = Promise.resolve();
         var anchoPag = Math.floor(anchoVisor / 2);
@@ -137,7 +139,7 @@
         for (var i = 1; i <= total; i++) {
             (function (n) {
                 chain = chain.then(function () {
-                    return renderPagina(doc, n, anchoPag, altoVisor).then(function (dataUrl) {
+                    return renderPagina(doc, n, anchoPag, altoVisor, renderCfg).then(function (dataUrl) {
                         imgs.push(dataUrl);
                         setProg(id, Math.round(5 + (n / total) * 80));
                         setTxt(id, 'Página ' + n + ' de ' + total + '…');
@@ -148,21 +150,36 @@
         return chain.then(function () { return imgs; });
     }
 
-    function renderPagina(doc, n, anchoPag, altoPag) {
+    function renderPagina(doc, n, anchoPag, altoPag, renderCfg) {
+        renderCfg = renderCfg || {};
+        var calidad = Math.min(1, Math.max(0.5, parseFloat(renderCfg.calidad) || 0.85));
+        var escalaUsuario = Math.min(3, Math.max(1, parseFloat(renderCfg.escala) || 1.5));
+        var zoomMax = Math.max(1, parseFloat(renderCfg.zoomMax) || 2);
+
         return doc.getPage(n).then(function (pag) {
-            var vp0    = pag.getViewport({ scale: 1 });
-            var escala = Math.min(anchoPag / vp0.width, altoPag / vp0.height) * 1.5;
-            var vp     = pag.getViewport({ scale: escala });
+            var vp0 = pag.getViewport({ scale: 1 });
+            var fitScale = Math.min(anchoPag / vp0.width, altoPag / vp0.height);
+            var escalaDeseada = fitScale * escalaUsuario * zoomMax;
+            var maxPixels = calidad >= 0.98 ? 12000000 : 8500000;
+            var maxScalePorPixeles = Math.sqrt(maxPixels / (vp0.width * vp0.height));
+            var escalaFinal = Math.min(escalaDeseada, maxScalePorPixeles);
+            var vp = pag.getViewport({ scale: escalaFinal });
 
             var canvas  = document.createElement('canvas');
-            canvas.width  = vp.width;
-            canvas.height = vp.height;
-            var ctx = canvas.getContext('2d');
+            canvas.width  = Math.round(vp.width);
+            canvas.height = Math.round(vp.height);
+            var ctx = canvas.getContext('2d', { alpha: false });
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             return pag.render({ canvasContext: ctx, viewport: vp }).promise
-                .then(function () { return canvas.toDataURL('image/jpeg', 0.88); });
+                .then(function () {
+                    return calidad >= 0.98
+                        ? canvas.toDataURL('image/png')
+                        : canvas.toDataURL('image/jpeg', Math.max(0.7, calidad));
+                });
         });
     }
 
@@ -186,6 +203,12 @@
         book.className = 'fbm-libro';
         book.style.cssText = 'position:relative;width:100%;margin:0 auto;';
         elVisor.appendChild(book);
+
+        var panLayer = document.createElement('div');
+        panLayer.id = 'fbm-pan-' + id;
+        panLayer.className = 'fbm-pan-layer';
+        panLayer.setAttribute('aria-hidden', 'true');
+        elVisor.appendChild(panLayer);
 
         // Double rAF: garantiza layout completo antes de que StPageFlip lea getBoundingClientRect
         requestAnimationFrame(function () {
@@ -220,13 +243,23 @@
                     flipBook:     fb,
                     imagenes:     imageSources,
                     libroEl:      book,
+                    panLayer:     panLayer,
                     zoom:         1,
+                    panX:         0,
+                    panY:         0,
+                    isPanning:    false,
                     totalPaginas: imageSources.length,
                     ancho:        ancho,
                     alto:         alto,
                 };
 
                 fb.on('flip', function (e) {
+                    var inst = instancias[id];
+                    if (inst) {
+                        inst.panX = 0;
+                        inst.panY = 0;
+                        inst.isPanning = false;
+                    }
                     setInfo(id, 'Pág. ' + (e.data + 1) + ' / ' + imageSources.length);
                     resaltarMiniatura(id, e.data);
                     actualizarVista(id);
@@ -261,6 +294,7 @@
                 conectarBotones(id);
                 conectarTeclado(id, elVisor);
                 conectarSwipe(id, elVisor, fb);
+                conectarArrastre(id, panLayer);
 
             }); // rAF 2
         }); // rAF 1
@@ -354,9 +388,37 @@
         return document.getElementById('fbm-visor-wrap-' + id);
     }
 
+    function getPanLayerEl(id) {
+        return document.getElementById('fbm-pan-' + id);
+    }
+
     function esFullscreenId(id) {
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
         return !!fsEl && fsEl === getWrapEl(id);
+    }
+
+    function resetPan(id) {
+        var inst = instancias[id];
+        if (!inst) return;
+        inst.panX = 0;
+        inst.panY = 0;
+        inst.isPanning = false;
+        var panLayer = getPanLayerEl(id);
+        if (panLayer) panLayer.classList.remove('is-dragging');
+    }
+
+    function sincronizarModoPan(id) {
+        var inst = instancias[id];
+        var panLayer = getPanLayerEl(id);
+        var visor = document.getElementById('fbm-visor-' + id);
+        var activo = !!(inst && panLayer && inst.zoom > 1.0001);
+
+        if (panLayer) {
+            panLayer.classList.toggle('is-active', activo);
+            panLayer.setAttribute('aria-hidden', activo ? 'false' : 'true');
+        }
+        if (visor) visor.classList.toggle('fbm-visor--zoomed', activo);
+        if (!activo && inst) inst.isPanning = false;
     }
 
     function sincronizarLayoutViewport(id) {
@@ -375,7 +437,7 @@
         book.style.maxWidth = 'none';
 
         if (!esFS) {
-            visor.style.height = inst.alto + 'px';
+            visor.style.height = '';
             return;
         }
 
@@ -405,29 +467,66 @@
         return 0;
     }
 
+    function clampPan(id, bounds) {
+        var inst = instancias[id];
+        var visor = document.getElementById('fbm-visor-' + id);
+        if (!inst || !visor) return;
+
+        if (!bounds || inst.zoom <= 1.0001) {
+            inst.panX = 0;
+            inst.panY = 0;
+            return;
+        }
+
+        var viewportW = visor.clientWidth || bounds.width || 0;
+        var viewportH = visor.clientHeight || bounds.height || 0;
+        var scaledW = (bounds.width || viewportW) * inst.zoom;
+        var scaledH = (bounds.height || viewportH) * inst.zoom;
+        var maxPanX = Math.max(0, Math.round((scaledW - viewportW) / 2));
+        var maxPanY = Math.max(0, Math.round((scaledH - viewportH) / 2));
+
+        inst.panX = Math.max(-maxPanX, Math.min(maxPanX, inst.panX || 0));
+        inst.panY = Math.max(-maxPanY, Math.min(maxPanY, inst.panY || 0));
+    }
+
+    function aplicarTransformacion(id, bounds) {
+        var inst = instancias[id];
+        var book = getLibroEl(id);
+        if (!inst || !book) return;
+
+        if (!bounds && inst.flipBook && typeof inst.flipBook.getBoundsRect === 'function') {
+            bounds = inst.flipBook.getBoundsRect();
+        }
+
+        clampPan(id, bounds);
+        sincronizarModoPan(id);
+
+        var offsetX = getOffsetPaginaUnica(inst, bounds);
+        var tx = Math.round(offsetX + (inst.panX || 0));
+        var ty = Math.round(inst.panY || 0);
+
+        book.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + inst.zoom + ')';
+        book.style.transformOrigin = 'center top';
+        book.style.transition = inst.isPanning ? 'none' : 'transform 0.2s ease';
+    }
+
     function actualizarVista(id) {
         var inst = instancias[id];
         if (!inst) return;
 
         sincronizarLayoutViewport(id);
 
-        var book = getLibroEl(id);
         var visorEl = document.getElementById('fbm-visor-' + id);
         var bounds = inst.flipBook && typeof inst.flipBook.getBoundsRect === 'function'
             ? inst.flipBook.getBoundsRect()
             : null;
         var altoBase = bounds && bounds.height ? bounds.height : inst.alto;
-        var offsetX = getOffsetPaginaUnica(inst, bounds);
 
-        if (book) {
-            book.style.transform = 'translateX(' + offsetX + 'px) scale(' + inst.zoom + ')';
-            book.style.transformOrigin = 'center top';
-            book.style.transition = 'transform 0.2s ease';
+        if (visorEl && !esFullscreenId(id)) {
+            visorEl.style.height = Math.round(altoBase) + 'px';
         }
 
-        if (visorEl) {
-            visorEl.style.height = Math.round(altoBase * inst.zoom) + 'px';
-        }
+        aplicarTransformacion(id, bounds);
     }
 
     function refrescarFlipbook(id) {
@@ -453,6 +552,7 @@
         idx = Math.max(0, Math.min(niveles.length - 1, idx + dir));
         inst.zoom = niveles[idx];
 
+        if (inst.zoom <= 1.0001) resetPan(id);
         actualizarVista(id);
 
         var zEl = document.getElementById('fbm-zoom-' + id);
@@ -545,15 +645,71 @@
     function conectarSwipe(id, elVisor, fb) {
         var sx = 0, sy = 0;
         elVisor.addEventListener('touchstart', function(e) {
+            var inst = instancias[id];
+            if (inst && inst.zoom > 1.0001) return;
             sx = e.touches[0].clientX; sy = e.touches[0].clientY;
         }, { passive: true });
         elVisor.addEventListener('touchend', function(e) {
+            var inst = instancias[id];
+            if (inst && inst.zoom > 1.0001) return;
             var dx = e.changedTouches[0].clientX - sx;
             var dy = e.changedTouches[0].clientY - sy;
             if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
                 if (dx < 0) fb.flipNext(); else fb.flipPrev();
             }
         }, { passive: true });
+    }
+
+    function conectarArrastre(id, panLayer) {
+        if (!panLayer || panLayer.dataset.dragBound === '1') return;
+        panLayer.dataset.dragBound = '1';
+
+        function finalizar(e) {
+            var inst = instancias[id];
+            if (!inst) return;
+            inst.isPanning = false;
+            panLayer.classList.remove('is-dragging');
+            if (e && e.pointerId != null && panLayer.hasPointerCapture && panLayer.hasPointerCapture(e.pointerId)) {
+                panLayer.releasePointerCapture(e.pointerId);
+            }
+            aplicarTransformacion(id);
+        }
+
+        panLayer.addEventListener('pointerdown', function (e) {
+            var inst = instancias[id];
+            if (!inst || inst.zoom <= 1.0001) return;
+            inst.isPanning = true;
+            inst.panStartX = e.clientX;
+            inst.panStartY = e.clientY;
+            inst.panOriginX = inst.panX || 0;
+            inst.panOriginY = inst.panY || 0;
+            panLayer.classList.add('is-dragging');
+            if (panLayer.setPointerCapture) panLayer.setPointerCapture(e.pointerId);
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        panLayer.addEventListener('pointermove', function (e) {
+            var inst = instancias[id];
+            if (!inst || !inst.isPanning) return;
+            inst.panX = (inst.panOriginX || 0) + (e.clientX - inst.panStartX);
+            inst.panY = (inst.panOriginY || 0) + (e.clientY - inst.panStartY);
+            aplicarTransformacion(id);
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave'].forEach(function (ev) {
+            panLayer.addEventListener(ev, finalizar);
+        });
+
+        panLayer.addEventListener('click', function (e) {
+            var inst = instancias[id];
+            if (inst && inst.zoom > 1.0001) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
     }
 
     function conectarTeclado(id, elVisor) {

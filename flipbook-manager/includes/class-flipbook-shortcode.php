@@ -70,6 +70,8 @@ class Flipbook_Shortcode {
             'workerSrc' => FBM_PLUGIN_URL . 'assets/js/pdf.worker.min.js?v=' . FBM_VERSION,
             'buscar'    => $cfg['btn_buscar'],
             'tema'      => $tema,
+            'calidad'   => floatval( $cfg['calidad'] ?? 0.85 ),
+            'escala'    => floatval( $cfg['escala'] ?? 1.5 ),
         ));
 
         // ── CSS inline con apariencia individual ──

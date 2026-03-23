@@ -213,6 +213,25 @@
     width:            100%;
     transition:       transform 0.2s ease;
     transform-origin: center top;
+    will-change:      transform;
+}
+
+.fbm-pan-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    background: transparent;
+}
+
+.fbm-pan-layer.is-active {
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
+}
+
+.fbm-pan-layer.is-dragging {
+    cursor: grabbing;
 }
 
 /* Canvas del efecto flip */
