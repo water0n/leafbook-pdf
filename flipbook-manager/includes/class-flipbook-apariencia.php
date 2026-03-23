@@ -753,6 +753,17 @@ class Flipbook_Apariencia {
                 . '#fbm-wrap-' . $post_id . ' .fbm-panel-miniaturas,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-search-resultados{background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}'
                 . '#fbm-wrap-' . $post_id . ' .fbm-panel-miniaturas.fbm-miniaturas--visible{border-color:transparent!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-btn{background:rgba(255,255,255,0.78)!important;border-color:rgba(15,23,42,0.10)!important;color:#0f172a!important;box-shadow:none!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-btn:hover{background:rgba(255,255,255,0.94)!important;border-color:rgba(15,23,42,0.16)!important;color:#020617!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-btn--activo,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-btn-fs,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-btn-fs.fs-activo{background:rgba(96,165,250,0.14)!important;border-color:rgba(59,130,246,0.28)!important;color:#1d4ed8!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-pagina-info,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-zoom-nivel,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-miniaturas-titulo{color:rgba(15,23,42,0.62)!important;opacity:1!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-miniatura span{background:rgba(255,255,255,0.88)!important;color:rgba(15,23,42,0.72)!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-progreso-barra{background:rgba(15,23,42,0.08)!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-progreso-fill{opacity:0.72!important;}'
             : '';
 
         $barra_css = $tipo === 'sin_fondo' ? 'transparent' : $barra;

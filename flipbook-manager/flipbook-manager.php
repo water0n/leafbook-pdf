@@ -2,9 +2,9 @@
 /**
  * Plugin Name:       LeafBook PDF
  * Plugin URI:        https://kaabapp.com
- * Description:       Gestiona PDFs con visor de volteo de página. Inserta con [leafbook id="X"] o iframe.
- * Version:           1.4.11
- * Author:            Daniel Zermeño
+ * Description:       Gestiona PDFs con visor de volteo de pagina. Inserta con [leafbook id="X"] o iframe.
+ * Version:           1.4.12
+ * Author:            Daniel Zermeno
  * Author URI:        https://kaabapp.com
  * License:           GPL v2 or later
  * Text Domain:       leafbook-pdf
@@ -15,7 +15,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'FBM_VERSION',    '1.4.11' );
+define( 'FBM_VERSION',    '1.4.12' );
 define( 'FBM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FBM_PLUGIN_URL', plugin_dir_url( __FILE__ )  );
 
@@ -26,7 +26,7 @@ if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
     return;
 }
 
-// ── Módulos ───────────────────────────────────────────────────
+// -- Modulos --------------------------------------------------
 require_once FBM_PLUGIN_DIR . 'includes/class-flipbook-settings.php';
 require_once FBM_PLUGIN_DIR . 'includes/class-flipbook-taxonomy.php';
 require_once FBM_PLUGIN_DIR . 'includes/class-flipbook-cpt.php';
@@ -35,7 +35,7 @@ require_once FBM_PLUGIN_DIR . 'includes/class-flipbook-apariencia.php';
 require_once FBM_PLUGIN_DIR . 'includes/class-flipbook-shortcode.php';
 require_once FBM_PLUGIN_DIR . 'includes/class-flipbook-block.php';
 
-// ── Inicializar ───────────────────────────────────────────────
+// -- Inicializar ----------------------------------------------
 add_action( 'plugins_loaded', function() {
     ( new Flipbook_Settings()   )->register();
     ( new Flipbook_Taxonomy()   )->register();
@@ -46,16 +46,16 @@ add_action( 'plugins_loaded', function() {
     ( new Flipbook_Block()      )->register();
 });
 
-// ════════════════════════════════════════════════════════════════
+// ================================================================
 // PROXY DE PDF  /?lbpdf_proxy=ID
 // Sirve el PDF desde disco con headers CORS + HTTPS correctos.
-// Bypasea cachés (SiteGround, WP Super Cache, etc.) usando prioridad 1.
-// ════════════════════════════════════════════════════════════════
+// Bypasea caches (SiteGround, WP Super Cache, etc.) usando prioridad 1.
+// ================================================================
 add_action( 'template_redirect', 'lbpdf_proxy_handler', 1 );
 function lbpdf_proxy_handler() {
     if ( ! isset( $_GET['lbpdf_proxy'] ) ) return;
 
-    // Desactivar caché de SiteGround y otros plugins de caché
+    // Desactivar cache de SiteGround y otros plugins de cache
     if ( ! defined('DONOTCACHEPAGE') ) define( 'DONOTCACHEPAGE', true );
     if ( ! defined('DONOTCACHEDB')   ) define( 'DONOTCACHEDB',   true );
 
@@ -87,7 +87,7 @@ function lbpdf_proxy_handler() {
         header('X-LB-Source: disk');
         readfile($pdf_path);
     } else {
-        // Fallback: fetch remoto (cuando el attachment_id no está o el path no existe)
+        // Fallback: fetch remoto (cuando el attachment_id no esta o el path no existe)
         $resp = wp_remote_get( $pdf_url, array(
             'timeout'   => 45,
             'sslverify' => false,
@@ -110,10 +110,10 @@ function lbpdf_proxy_handler() {
     exit;
 }
 
-// ════════════════════════════════════════════════════════════════
+// ================================================================
 // EMBED STANDALONE  /?lbpdf_embed=ID
-// Página HTML limpia para el <iframe> — sin tema de WP
-// ════════════════════════════════════════════════════════════════
+// Pagina HTML limpia para el <iframe> - sin tema de WP
+// ================================================================
 add_action( 'template_redirect', 'lbpdf_embed_handler', 2 );
 function lbpdf_embed_handler() {
     if ( ! isset( $_GET['lbpdf_embed'] ) ) return;
@@ -125,7 +125,7 @@ function lbpdf_embed_handler() {
     if ( ! defined('DONOTCACHEPAGE') ) define('DONOTCACHEPAGE', true);
 
     $pid = intval( $_GET['lbpdf_embed'] );
-    if ( $pid <= 0 ) wp_die('ID inválido.');
+    if ( $pid <= 0 ) wp_die('ID invalido.');
 
     $post = get_post($pid);
     if ( ! $post || $post->post_type !== 'flipbook' || $post->post_status !== 'publish' )
@@ -151,6 +151,7 @@ function lbpdf_embed_handler() {
     $html = $sc->render_shortcode( array('id'=>$pid,'ancho'=>$ancho,'alto'=>$alto) );
 
     $css_ap = Flipbook_Apariencia::css_inline($pid, $cfg);
+    $embed_bg = ( ($cfg['fondo_tipo'] ?? 'color') === 'sin_fondo' ) ? 'transparent' : '#0f172a';
 
     $datos_js = wp_json_encode(array(
         'pdfUrl'    => esc_url($proxy_url),
@@ -170,7 +171,7 @@ function lbpdf_embed_handler() {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?php echo esc_html(get_the_title($pid)); ?></title>
 <link rel="stylesheet" href="<?php echo esc_url($css_url); ?>">
-<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#0f172a;display:flex;align-items:flex-start;justify-content:center;min-height:100vh;padding:0;overflow:hidden;}.fbm-contenedor-externo{margin:0!important;border-radius:0!important;max-width:100%!important;width:100%;}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box;}html,body{background:<?php echo esc_attr($embed_bg); ?>;min-height:100%;}body{display:flex;align-items:flex-start;justify-content:center;min-height:100vh;padding:0;overflow:hidden;}.fbm-contenedor-externo{margin:0!important;border-radius:0!important;max-width:100%!important;width:100%;}</style>
 <?php echo $css_ap; ?>
 </head>
 <body>
@@ -185,7 +186,7 @@ function lbpdf_embed_handler() {
     exit;
 }
 
-// ── Quitar X-Frame-Options en la página embed ─────────────────
+// -- Quitar X-Frame-Options en la pagina embed ----------------
 add_action('send_headers', function() {
     if ( isset($_GET['lbpdf_embed']) ) {
         header_remove('X-Frame-Options');
@@ -194,6 +195,6 @@ add_action('send_headers', function() {
     }
 });
 
-// ── Activación / Desactivación ────────────────────────────────
+// -- Activacion / Desactivacion -------------------------------
 register_activation_hook(   __FILE__, function(){ ( new Flipbook_CPT() )->registrar_tipo(); flush_rewrite_rules(); });
 register_deactivation_hook( __FILE__, function(){ flush_rewrite_rules(); });

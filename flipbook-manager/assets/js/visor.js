@@ -1,5 +1,5 @@
 /**
- * visor.js — LeafBook PDF v1.4.11
+ * visor.js — LeafBook PDF v1.4.12
  *
  * FIXES:
  *  1. El flipbook se monta sobre un contenedor HTML real y
