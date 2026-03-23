@@ -281,13 +281,48 @@
 }
 
 /* ── Pantalla completa ── */
-:fullscreen .fbm-contenedor-externo,
-:-webkit-full-screen .fbm-contenedor-externo {
-    border-radius: 0;
-    box-shadow: none;
+.fbm-contenedor-externo:fullscreen,
+.fbm-contenedor-externo:-webkit-full-screen {
+    width: 100vw !important;
+    max-width: none !important;
     height: 100vh;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
     display: flex;
     flex-direction: column;
+    background: transparent;
+}
+
+.fbm-contenedor-externo:fullscreen::backdrop,
+.fbm-contenedor-externo:-webkit-full-screen::backdrop {
+    background: rgba(2, 6, 23, 0.96);
+}
+
+.fbm-contenedor-externo:fullscreen .fbm-controles,
+.fbm-contenedor-externo:-webkit-full-screen .fbm-controles {
+    margin: 0;
+    border-radius: 0;
+}
+
+.fbm-contenedor-externo:fullscreen .fbm-area-principal,
+.fbm-contenedor-externo:-webkit-full-screen .fbm-area-principal {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.fbm-contenedor-externo:fullscreen .fbm-visor-wrap,
+.fbm-contenedor-externo:-webkit-full-screen .fbm-visor-wrap,
+.fbm-contenedor-externo:fullscreen .fbm-visor,
+.fbm-contenedor-externo:-webkit-full-screen .fbm-visor {
+    width: 100%;
+    height: 100% !important;
+    min-height: 0;
+}
+
+.fbm-contenedor-externo:fullscreen .fbm-libro,
+.fbm-contenedor-externo:-webkit-full-screen .fbm-libro {
+    max-width: none !important;
 }
 
 /* ── Responsive ── */
@@ -489,3 +524,11 @@
     -webkit-backdrop-filter: blur(6px);
 }
 
+
+.lbpdf-tema-transparente.fbm-contenedor-externo:fullscreen .fbm-controles,
+.lbpdf-tema-transparente.fbm-contenedor-externo:-webkit-full-screen .fbm-controles {
+    background: rgba(255, 255, 255, 0.06);
+    border-left: none;
+    border-right: none;
+    border-top: none;
+}

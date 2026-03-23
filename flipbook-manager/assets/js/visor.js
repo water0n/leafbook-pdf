@@ -1,5 +1,5 @@
 /**
- * visor.js — LeafBook PDF v1.4.12
+ * visor.js — LeafBook PDF v1.4.13
  *
  * FIXES:
  *  1. El flipbook se monta sobre un contenedor HTML real y
@@ -184,7 +184,7 @@
         var book = document.createElement('div');
         book.id = 'fbm-book-' + id;
         book.className = 'fbm-libro';
-        book.style.cssText = 'position:relative;width:100%;max-width:' + ancho + 'px;margin:0 auto;';
+        book.style.cssText = 'position:relative;width:100%;margin:0 auto;';
         elVisor.appendChild(book);
 
         // Double rAF: garantiza layout completo antes de que StPageFlip lea getBoundingClientRect
@@ -193,15 +193,17 @@
 
                 var minPageWidth  = Math.max(160, Math.round(anchoPag * 0.42));
                 var minPageHeight = Math.max(220, Math.round(alto * (minPageWidth / anchoPag)));
+                var maxPageWidth  = Math.max(anchoPag, Math.round(((window.screen && window.screen.width) || ancho) * 0.46));
+                var maxPageHeight = Math.max(alto, Math.round(((window.screen && window.screen.height) || alto) * 0.90));
 
                 var fb = new St.PageFlip(book, {
                     width:               anchoPag,
                     height:              alto,
                     size:                'stretch',
                     minWidth:            minPageWidth,
-                    maxWidth:            anchoPag,
+                    maxWidth:            maxPageWidth,
                     minHeight:           minPageHeight,
-                    maxHeight:           alto,
+                    maxHeight:           maxPageHeight,
                     drawShadow:          true,
                     flippingTime:        600,
                     usePortrait:         true,
@@ -344,6 +346,51 @@
         return document.getElementById('fbm-book-' + id);
     }
 
+    function getWrapEl(id) {
+        return document.getElementById('fbm-wrap-' + id);
+    }
+
+    function getVisorWrapEl(id) {
+        return document.getElementById('fbm-visor-wrap-' + id);
+    }
+
+    function esFullscreenId(id) {
+        var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
+        return !!fsEl && fsEl === getWrapEl(id);
+    }
+
+    function sincronizarLayoutViewport(id) {
+        var inst = instancias[id];
+        var wrap = getWrapEl(id);
+        var visor = document.getElementById('fbm-visor-' + id);
+        var visorWrap = getVisorWrapEl(id);
+        var book = getLibroEl(id);
+        if (!inst || !wrap || !visor || !visorWrap || !book) return;
+
+        var esFS = esFullscreenId(id);
+        wrap.classList.toggle('fbm-wrap--fullscreen', esFS);
+        wrap.style.maxWidth = esFS ? 'none' : inst.ancho + 'px';
+        wrap.style.width = esFS ? '100vw' : '';
+        wrap.style.height = esFS ? (window.innerHeight + 'px') : '';
+        book.style.maxWidth = 'none';
+
+        if (!esFS) {
+            visor.style.height = inst.alto + 'px';
+            return;
+        }
+
+        var usados = 0;
+        var controles = document.getElementById('fbm-controles-' + id);
+        var infoBar = wrap.querySelector('.fbm-info-bar');
+        var search = document.getElementById('fbm-search-res-' + id);
+
+        if (controles) usados += controles.offsetHeight;
+        if (infoBar) usados += infoBar.offsetHeight;
+        if (search && search.style.display !== 'none') usados += search.offsetHeight;
+
+        visor.style.height = Math.max(260, window.innerHeight - usados) + 'px';
+    }
+
     function getOffsetPaginaUnica(inst, bounds) {
         if (!inst || !bounds || !inst.flipBook) return 0;
         if (typeof inst.flipBook.getOrientation !== 'function') return 0;
@@ -361,6 +408,8 @@
     function actualizarVista(id) {
         var inst = instancias[id];
         if (!inst) return;
+
+        sincronizarLayoutViewport(id);
 
         var book = getLibroEl(id);
         var visorEl = document.getElementById('fbm-visor-' + id);
@@ -384,9 +433,13 @@
     function refrescarFlipbook(id) {
         var inst = instancias[id];
         if (!inst || !inst.flipBook || typeof inst.flipBook.update !== 'function') return;
+
+        sincronizarLayoutViewport(id);
+
         requestAnimationFrame(function () {
             inst.flipBook.update();
             requestAnimationFrame(function () {
+                sincronizarLayoutViewport(id);
                 actualizarVista(id);
             });
         });
@@ -423,12 +476,13 @@
     // FULLSCREEN
     // ══════════════════════════════════════════════════════
     function hacerFullscreen(id) {
+        var host = getWrapEl(id) || document.documentElement;
         try {
-            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                var req = document.documentElement.requestFullscreen
-                       || document.documentElement.webkitRequestFullscreen
-                       || document.documentElement.mozRequestFullScreen;
-                if (req) req.call(document.documentElement);
+            if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement) {
+                var req = host.requestFullscreen
+                       || host.webkitRequestFullscreen
+                       || host.mozRequestFullScreen;
+                if (req) req.call(host);
             } else {
                 var ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen;
                 if (ex) ex.call(document);
@@ -438,17 +492,22 @@
 
     ['fullscreenchange','webkitfullscreenchange'].forEach(function(ev) {
         document.addEventListener(ev, function () {
-            var esFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
             document.querySelectorAll('.fbm-btn-fs').forEach(function (btn) {
-                btn.classList.toggle('fs-activo', esFS);
-                btn.title = esFS ? 'Salir de pantalla completa' : 'Pantalla completa (F)';
+                var idBtn = btn.dataset.id;
+                var activo = esFullscreenId(idBtn);
+                btn.classList.toggle('fs-activo', activo);
+                btn.title = activo ? 'Salir de pantalla completa' : 'Pantalla completa (F)';
             });
+
             document.querySelectorAll('.fbm-visor').forEach(function(v) {
                 var id2  = v.dataset.id;
                 var inst = instancias[id2];
                 if (!inst) return;
-                if (!esFS) v.style.height = inst.alto + 'px';
-                refrescarFlipbook(id2);
+
+                sincronizarLayoutViewport(id2);
+                [0, 80, 220].forEach(function(delay) {
+                    window.setTimeout(function () { refrescarFlipbook(id2); }, delay);
+                });
             });
         });
     });

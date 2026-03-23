@@ -111,7 +111,7 @@ class Flipbook_Settings {
                 <div class="lbpdf-hero-icono">📄</div>
                 <div>
                     <h1>LeafBook PDF</h1>
-                    <p>by <strong style="color:#cbd5e1">KaabApp.com</strong> · Daniel Zermeño &nbsp;·&nbsp; Versión <?php echo FBM_VERSION; ?></p>
+                    <p>by <strong style="color:#cbd5e1">KaabApp.com</strong> · Daniel Zermeno &nbsp;·&nbsp; Versión <?php echo FBM_VERSION; ?></p>
                     <p style="margin-top:6px;">Gestiona tus PDFs y obten un ID único para incrustarlos donde quieras. <a href="<?php echo admin_url('post-new.php?post_type=flipbook'); ?>" style="color:#60a5fa;">+ Agregar PDF →</a></p>
                 </div>
             </div>
@@ -173,7 +173,7 @@ class Flipbook_Settings {
             </div>
             <?php endif; ?>
 
-            <div class="lbpdf-footer">LeafBook PDF · KaabApp.com · by Daniel Zermeño</div>
+            <div class="lbpdf-footer">LeafBook PDF · KaabApp.com · by Daniel Zermeno</div>
         </div>
         </div>
         <?php

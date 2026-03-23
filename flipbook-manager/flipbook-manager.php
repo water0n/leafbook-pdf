@@ -3,7 +3,7 @@
  * Plugin Name:       LeafBook PDF
  * Plugin URI:        https://kaabapp.com
  * Description:       Gestiona PDFs con visor de volteo de pagina. Inserta con [leafbook id="X"] o iframe.
- * Version:           1.4.12
+ * Version:           1.4.13
  * Author:            Daniel Zermeno
  * Author URI:        https://kaabapp.com
  * License:           GPL v2 or later
@@ -15,7 +15,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'FBM_VERSION',    '1.4.12' );
+define( 'FBM_VERSION',    '1.4.13' );
 define( 'FBM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FBM_PLUGIN_URL', plugin_dir_url( __FILE__ )  );
 
