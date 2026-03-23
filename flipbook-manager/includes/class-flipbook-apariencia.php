@@ -748,6 +748,8 @@ class Flipbook_Apariencia {
                 . '#fbm-wrap-' . $post_id . ' .fbm-visor-wrap,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-visor,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-cargando{background:transparent!important;}'
+                . '#fbm-wrap-' . $post_id . ' .fbm-controles,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-info-bar{background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}'
             : '';
 
         $sombra_css = $sombra ? 'box-shadow:0 16px 48px rgba(0,0,0,.35)' : 'box-shadow:none';

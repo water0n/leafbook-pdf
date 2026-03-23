@@ -1,5 +1,5 @@
 /**
- * visor.js — LeafBook PDF v1.4.8
+ * visor.js — LeafBook PDF v1.4.9
  *
  * FIXES:
  *  1. El flipbook se monta sobre un contenedor HTML real y
@@ -227,6 +227,11 @@
                 fb.on('flip', function (e) {
                     setInfo(id, 'Pág. ' + (e.data + 1) + ' / ' + imageSources.length);
                     resaltarMiniatura(id, e.data);
+                    actualizarVista(id);
+                });
+
+                fb.on('changeOrientation', function () {
+                    refrescarFlipbook(id);
                 });
 
                 fb.on('init', function () {
@@ -339,6 +344,20 @@
         return document.getElementById('fbm-book-' + id);
     }
 
+    function getOffsetPaginaUnica(inst, bounds) {
+        if (!inst || !bounds || !inst.flipBook) return 0;
+        if (typeof inst.flipBook.getOrientation !== 'function') return 0;
+        if (inst.flipBook.getOrientation() !== 'landscape') return 0;
+
+        var idx = typeof inst.flipBook.getCurrentPageIndex === 'function'
+            ? inst.flipBook.getCurrentPageIndex()
+            : 0;
+
+        if (idx === 0) return -Math.round((bounds.pageWidth || 0) / 2);
+        if (idx >= inst.totalPaginas - 1) return Math.round((bounds.pageWidth || 0) / 2);
+        return 0;
+    }
+
     function actualizarVista(id) {
         var inst = instancias[id];
         if (!inst) return;
@@ -349,9 +368,10 @@
             ? inst.flipBook.getBoundsRect()
             : null;
         var altoBase = bounds && bounds.height ? bounds.height : inst.alto;
+        var offsetX = getOffsetPaginaUnica(inst, bounds);
 
         if (book) {
-            book.style.transform = 'scale(' + inst.zoom + ')';
+            book.style.transform = 'translateX(' + offsetX + 'px) scale(' + inst.zoom + ')';
             book.style.transformOrigin = 'center top';
             book.style.transition = 'transform 0.2s ease';
         }

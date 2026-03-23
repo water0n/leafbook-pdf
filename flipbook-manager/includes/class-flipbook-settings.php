@@ -411,7 +411,7 @@ class Flipbook_Settings {
         else                                    $fondo = 'background:' . $c1 . ';';
 
         $transparencia_css = $tipo === 'sin_fondo'
-            ? '.fbm-contenedor-externo,.fbm-area-principal,.fbm-visor-wrap,.fbm-visor,.fbm-cargando{background:transparent!important;}'
+            ? '.fbm-contenedor-externo,.fbm-area-principal,.fbm-visor-wrap,.fbm-visor,.fbm-cargando,.fbm-controles,.fbm-info-bar{background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}'
             : '';
 
         $sombra_css = $sombra ? 'box-shadow:0 20px 60px rgba(0,0,0,.45);' : 'box-shadow:none;';
