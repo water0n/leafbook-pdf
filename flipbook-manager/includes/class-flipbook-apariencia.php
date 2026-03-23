@@ -727,7 +727,7 @@ class Flipbook_Apariencia {
 
         // Tema transparente: el CSS de visor.css maneja todo el glassmorphism via clase
         // lbpdf-tema-transparente. El CSS inline sobreescribiría con colores sólidos.
-        if ( $tema_slug === 'transparente' ) {
+        if ( $tema_slug === 'transparente' && $tipo !== 'sin_fondo' ) {
             return '<style>'
                 . '#fbm-wrap-' . $post_id . '{border-radius:' . $rad . 'px;background:transparent!important;box-shadow:none!important;}'
                 . '#fbm-wrap-' . $post_id . '.fbm-contenedor-externo{background:transparent!important;}'
