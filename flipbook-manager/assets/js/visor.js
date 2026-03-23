@@ -1,5 +1,5 @@
 /**
- * visor.js — LeafBook PDF v1.4.14
+ * visor.js — LeafBook PDF v1.4.15
  *
  * FIXES:
  *  1. El flipbook se monta sobre un contenedor HTML real y
@@ -79,7 +79,7 @@
             var total = doc.numPages;
             setTxt(id, 'Procesando ' + total + ' páginas…');
             if (datos.buscar === '1') fbmIndexarTexto(id, doc);
-            return renderTodas(doc, total, ancho, alto, id, { calidad: calidadRender, escala: escalaRender, zoomMax: 2 });
+            return renderTodas(doc, total, ancho, alto, id, { calidad: calidadRender, escala: escalaRender, zoomMax: 3 });
         })
         .then(function (dataUrls) {
             // Calienta la decodificación del browser, pero el flipbook recibe
@@ -160,7 +160,7 @@
             var vp0 = pag.getViewport({ scale: 1 });
             var fitScale = Math.min(anchoPag / vp0.width, altoPag / vp0.height);
             var escalaDeseada = fitScale * escalaUsuario * zoomMax;
-            var maxPixels = calidad >= 0.98 ? 12000000 : 8500000;
+            var maxPixels = calidad >= 0.98 ? 20000000 : (calidad >= 0.9 ? 16000000 : 12000000);
             var maxScalePorPixeles = Math.sqrt(maxPixels / (vp0.width * vp0.height));
             var escalaFinal = Math.min(escalaDeseada, maxScalePorPixeles);
             var vp = pag.getViewport({ scale: escalaFinal });
@@ -176,7 +176,7 @@
 
             return pag.render({ canvasContext: ctx, viewport: vp }).promise
                 .then(function () {
-                    return calidad >= 0.98
+                    return calidad >= 0.9
                         ? canvas.toDataURL('image/png')
                         : canvas.toDataURL('image/jpeg', Math.max(0.7, calidad));
                 });
@@ -374,7 +374,7 @@
     // ══════════════════════════════════════════════════════
     // ZOOM
     // ══════════════════════════════════════════════════════
-    var niveles = [0.5, 0.6, 0.75, 1, 1.25, 1.5, 2];
+    var niveles = [0.4, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3];
 
     function getLibroEl(id) {
         return document.getElementById('fbm-book-' + id);
@@ -482,11 +482,23 @@
         var viewportH = visor.clientHeight || bounds.height || 0;
         var scaledW = (bounds.width || viewportW) * inst.zoom;
         var scaledH = (bounds.height || viewportH) * inst.zoom;
-        var maxPanX = Math.max(0, Math.round((scaledW - viewportW) / 2));
-        var maxPanY = Math.max(0, Math.round((scaledH - viewportH) / 2));
+        var baseOffsetX = getOffsetPaginaUnica(inst, bounds);
 
-        inst.panX = Math.max(-maxPanX, Math.min(maxPanX, inst.panX || 0));
-        inst.panY = Math.max(-maxPanY, Math.min(maxPanY, inst.panY || 0));
+        if (scaledW <= viewportW) {
+            inst.panX = 0;
+        } else {
+            var maxPanX = Math.max(0, Math.round((scaledW - viewportW) / 2));
+            var minX = -maxPanX - baseOffsetX;
+            var maxX = maxPanX - baseOffsetX;
+            inst.panX = Math.max(minX, Math.min(maxX, inst.panX || 0));
+        }
+
+        if (scaledH <= viewportH) {
+            inst.panY = 0;
+        } else {
+            var maxPanY = Math.max(0, Math.round((scaledH - viewportH) / 2));
+            inst.panY = Math.max(-maxPanY, Math.min(maxPanY, inst.panY || 0));
+        }
     }
 
     function aplicarTransformacion(id, bounds) {
@@ -552,7 +564,11 @@
         idx = Math.max(0, Math.min(niveles.length - 1, idx + dir));
         inst.zoom = niveles[idx];
 
-        if (inst.zoom <= 1.0001) resetPan(id);
+        if (inst.zoom <= 1.0001) {
+            resetPan(id);
+        } else {
+            clampPan(id, inst.flipBook && typeof inst.flipBook.getBoundsRect === 'function' ? inst.flipBook.getBoundsRect() : null);
+        }
         actualizarVista(id);
 
         var zEl = document.getElementById('fbm-zoom-' + id);
