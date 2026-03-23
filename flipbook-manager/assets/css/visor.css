@@ -1,0 +1,441 @@
+/*
+ * visor.css — FASE 4
+ * Estilos completos: controles, progreso, miniaturas, zoom, fullscreen, responsive
+ */
+
+/* ── Variables de color ── */
+:root {
+    --fbm-bg-barra:   #0f172a;
+    --fbm-bg-visor:   #1e293b;
+    --fbm-btn-bg:     rgba(255,255,255,0.07);
+    --fbm-btn-hover:  rgba(255,255,255,0.16);
+    --fbm-btn-activo: rgba(99,179,237,0.25);
+    --fbm-acento:     #60a5fa;
+    --fbm-texto:      #cbd5e1;
+    --fbm-texto-dim:  #64748b;
+    --fbm-radio:      10px;
+}
+
+/* ── Contenedor externo ── */
+.fbm-contenedor-externo {
+    font-family: system-ui, -apple-system, sans-serif;
+    border-radius: var(--fbm-radio);
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.40);
+    margin: 24px auto;
+    background: var(--fbm-bg-visor);
+}
+
+/* ── Barra de controles ── */
+.fbm-controles {
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    gap:             6px;
+    padding:         8px 12px;
+    background:      var(--fbm-bg-barra);
+    user-select:     none;
+    flex-wrap:       wrap;
+}
+
+.fbm-ctrl-grupo {
+    display:     flex;
+    align-items: center;
+    gap:         4px;
+}
+
+/* ── Botones ── */
+.fbm-btn {
+    background:    var(--fbm-btn-bg);
+    border:        1px solid rgba(255,255,255,0.10);
+    color:         var(--fbm-texto);
+    padding:       6px 11px;
+    border-radius: 6px;
+    cursor:        pointer;
+    font-size:     14px;
+    line-height:   1;
+    transition:    background 0.15s, transform 0.1s, border-color 0.15s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.fbm-btn:hover {
+    background:   var(--fbm-btn-hover);
+    border-color: rgba(255,255,255,0.25);
+    transform:    translateY(-1px);
+    color:        #fff;
+}
+
+.fbm-btn:active      { transform: scale(0.95); }
+.fbm-btn--activo     { background: var(--fbm-btn-activo); border-color: var(--fbm-acento); color: var(--fbm-acento); }
+
+.fbm-btn-descarga { font-size: 15px; }
+
+/* ── Botón Fullscreen — destacado ── */
+.fbm-btn-fs {
+    background:    rgba(96, 165, 250, 0.15) !important;
+    border-color:  rgba(96, 165, 250, 0.40) !important;
+    color:         #93c5fd !important;
+    padding:       7px 10px !important;
+    margin-left:   6px;
+    border-radius: 7px !important;
+}
+.fbm-btn-fs:hover {
+    background:   rgba(96, 165, 250, 0.30) !important;
+    border-color: #60a5fa !important;
+    color:        #bfdbfe !important;
+    transform:    translateY(-1px) scale(1.05) !important;
+}
+.fbm-btn-fs svg { display:block; }
+
+/* Cuando está en fullscreen cambia a ícono "contraer" */
+.fbm-btn-fs.fs-activo {
+    background:   rgba(52, 211, 153, 0.15) !important;
+    border-color: rgba(52, 211, 153, 0.40) !important;
+    color:        #6ee7b7 !important;
+}
+
+/* Indicadores de texto en la barra */
+.fbm-pagina-info,
+.fbm-zoom-nivel {
+    color:       var(--fbm-texto-dim);
+    font-size:   12px;
+    min-width:   80px;
+    text-align:  center;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Barra de progreso (encima del visor) ── */
+.fbm-progreso-barra {
+    height:     3px;
+    background: rgba(255,255,255,0.06);
+    transition: opacity 0.5s ease;
+}
+
+.fbm-progreso-fill {
+    height:     100%;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    width:      0%;
+    transition: width 0.25s ease;
+}
+
+/* ── Área principal: visor + miniaturas ── */
+.fbm-area-principal {
+    display:  flex;
+    position: relative;
+    height:   100%;
+}
+
+/* ── Panel lateral de miniaturas ── */
+.fbm-panel-miniaturas {
+    width:        0;
+    overflow:     hidden;
+    background:   #0f172a;
+    transition:   width 0.25s ease;
+    flex-shrink:  0;
+    display:      flex;
+    flex-direction: column;
+}
+
+.fbm-panel-miniaturas.fbm-miniaturas--visible {
+    width: 140px;
+    border-right: 1px solid rgba(255,255,255,0.08);
+}
+
+.fbm-miniaturas-titulo {
+    padding:     10px 10px 6px;
+    font-size:   11px;
+    font-weight: 600;
+    color:       var(--fbm-texto-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    flex-shrink: 0;
+}
+
+.fbm-miniaturas-grid {
+    overflow-y: auto;
+    padding:    6px;
+    display:    flex;
+    flex-direction: column;
+    gap:        6px;
+    flex:       1;
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+}
+
+/* Cada miniatura */
+.fbm-miniatura {
+    cursor:        pointer;
+    border-radius: 4px;
+    overflow:      hidden;
+    border:        2px solid transparent;
+    transition:    border-color 0.15s, transform 0.12s;
+    position:      relative;
+}
+
+.fbm-miniatura:hover           { border-color: rgba(96,165,250,0.4); transform: scale(1.03); }
+.fbm-miniatura--activa         { border-color: var(--fbm-acento); }
+.fbm-miniatura img             { width: 100%; display: block; }
+
+.fbm-miniatura span {
+    position:   absolute;
+    bottom:     2px;
+    right:      4px;
+    font-size:  10px;
+    color:      rgba(255,255,255,0.7);
+    background: rgba(0,0,0,0.5);
+    padding:    1px 4px;
+    border-radius: 3px;
+    pointer-events: none;
+}
+
+/* ── Visor (canvas del flipbook) ── */
+.fbm-visor-wrap {
+    flex:      1;
+    position:  relative;
+    overflow:  hidden;
+    display:   flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--fbm-bg-visor);
+}
+
+.fbm-visor {
+    position:        relative;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    overflow:        hidden;
+}
+
+/* Canvas del efecto flip */
+.fbm-visor canvas {
+    display:    block;
+    max-width:  100%;
+    transition: transform 0.2s ease;
+}
+
+/* ── Pantalla de carga ── */
+.fbm-cargando {
+    position:        absolute;
+    inset:           0;
+    display:         flex;
+    flex-direction:  column;
+    align-items:     center;
+    justify-content: center;
+    gap:             12px;
+    background:      var(--fbm-bg-visor);
+    z-index:         10;
+}
+
+.fbm-cargando-texto {
+    color:     var(--fbm-texto-dim);
+    font-size: 13px;
+    margin:    0;
+}
+
+.fbm-spinner {
+    width:         40px;
+    height:        40px;
+    border:        3px solid rgba(255,255,255,0.07);
+    border-top-color: var(--fbm-acento);
+    border-radius: 50%;
+    animation:     fbm-spin 0.7s linear infinite;
+}
+
+.fbm-progreso-barra {
+    width:         200px;
+    height:        3px;
+    background:    rgba(255,255,255,0.08);
+    border-radius: 99px;
+    overflow:      hidden;
+}
+
+.fbm-progreso-fill {
+    height:     100%;
+    background: var(--fbm-acento);
+    width:      0%;
+    transition: width 0.2s ease;
+    border-radius: 99px;
+}
+
+@keyframes fbm-spin { to { transform: rotate(360deg); } }
+
+/* ── Error ── */
+.fbm-error {
+    background:    rgba(127,29,29,0.3);
+    border:        1px solid #7f1d1d;
+    color:         #fca5a5;
+    padding:       14px 20px;
+    border-radius: 8px;
+    font-size:     13px;
+    text-align:    center;
+    max-width:     380px;
+}
+
+/* ── Pantalla completa ── */
+:fullscreen .fbm-contenedor-externo,
+:-webkit-full-screen .fbm-contenedor-externo {
+    border-radius: 0;
+    box-shadow: none;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+    .fbm-controles {
+        gap: 4px;
+        padding: 6px 8px;
+    }
+    .fbm-ctrl-herramientas .fbm-zoom-nivel { display: none; }
+    .fbm-btn { padding: 5px 9px; font-size: 13px; }
+    .fbm-panel-miniaturas.fbm-miniaturas--visible { width: 110px; }
+    .fbm-visor { height: 380px !important; }
+}
+
+/* ════════════════════════════════════════════════════════
+   BARRA DE INFORMACIÓN (título, categoría, autor)
+   ════════════════════════════════════════════════════════ */
+.fbm-info-bar {
+    display:     flex;
+    align-items: center;
+    gap:         12px;
+    padding:     8px 16px;
+    background:  rgba(0,0,0,0.35);
+    font-size:   13px;
+    flex-wrap:   wrap;
+}
+.fbm-info-titulo  { font-weight:700; color:#f1f5f9; }
+.fbm-info-cat     { background:rgba(96,165,250,0.2); color:#93c5fd; padding:2px 8px; border-radius:20px; font-size:11px; }
+.fbm-info-autor   { color:#94a3b8; font-size:11px; margin-left:auto; }
+
+/* ════════════════════════════════════════════════════════
+   BÚSQUEDA
+   ════════════════════════════════════════════════════════ */
+.fbm-ctrl-buscar    { flex:1; min-width:0; }
+.fbm-search-wrap    { display:flex; align-items:center; gap:4px; background:rgba(255,255,255,0.08);
+                      border:1px solid rgba(255,255,255,0.14); border-radius:6px; padding:3px 6px 3px 10px;
+                      max-width:260px; transition:border-color .15s; }
+.fbm-search-wrap:focus-within { border-color:rgba(96,165,250,0.6); background:rgba(255,255,255,0.12); }
+.fbm-search-input   { flex:1; background:transparent; border:none; outline:none; font-size:12px;
+                      color:#e2e8f0; min-width:0; }
+.fbm-search-input::placeholder { color:#64748b; }
+.fbm-search-info    { font-size:10px; color:#64748b; white-space:nowrap; }
+.fbm-btn-search-clear { background:transparent; border:none; color:#64748b; cursor:pointer;
+                        padding:2px 4px; font-size:12px; line-height:1; }
+.fbm-btn-search-clear:hover { color:#cbd5e1; }
+
+/* Panel de resultados de búsqueda */
+.fbm-search-resultados  { background:#0f172a; border-top:1px solid rgba(255,255,255,0.06);
+                          padding:10px 14px; max-height:160px; overflow-y:auto; }
+.fbm-search-res-lista   { display:flex; flex-wrap:wrap; gap:6px; }
+.fbm-search-res-btn     { padding:5px 12px; background:rgba(96,165,250,0.15); border:1px solid rgba(96,165,250,0.3);
+                          color:#93c5fd; border-radius:5px; font-size:12px; cursor:pointer; transition:.15s; }
+.fbm-search-res-btn:hover { background:rgba(96,165,250,0.3); color:#bfdbfe; }
+.fbm-search-nada        { font-size:12px; color:#64748b; }
+
+/* SVG buttons — tamaño uniforme */
+.fbm-btn svg { display:block; }
+
+/* ════════════════════════════════════════════════════════
+   TEMAS DE BOTONES — ajustes de contraste
+   ════════════════════════════════════════════════════════ */
+
+/* Tema claro: texto oscuro en barra y spinner oscuro */
+.lbpdf-tema-claro .fbm-pagina-info,
+.lbpdf-tema-claro .fbm-zoom-nivel { color: #374151 !important; }
+.lbpdf-tema-claro .fbm-btn { border-color: rgba(0,0,0,0.15) !important; }
+
+/* ════════════════════════════════════════════════════════
+   TEMA TRANSPARENTE
+   El visor se integra al fondo de la página sin caja propia.
+   La barra de controles flota sobre el contenido con blur.
+   ════════════════════════════════════════════════════════ */
+.lbpdf-tema-transparente {
+    --fbm-bg-barra:  rgba(0, 0, 0, 0.18);
+    --fbm-bg-visor:  transparent;
+    --fbm-btn-bg:    rgba(255, 255, 255, 0.12);
+    --fbm-btn-hover: rgba(255, 255, 255, 0.24);
+    --fbm-texto:     inherit;
+    --fbm-texto-dim: rgba(0, 0, 0, 0.45);
+}
+
+/* Sin caja ni sombra en modo transparente */
+.lbpdf-tema-transparente.fbm-contenedor-externo {
+    background:   transparent !important;
+    box-shadow:   none !important;
+    border-radius: 0 !important;
+}
+
+/* Barra de controles flotante con glassmorphism */
+.lbpdf-tema-transparente .fbm-controles {
+    background:            rgba(255, 255, 255, 0.10);
+    backdrop-filter:       blur(12px) saturate(160%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    border:                1px solid rgba(255, 255, 255, 0.20);
+    border-radius:         10px;
+    margin:                0 0 6px;
+}
+
+/* Visor y wrap sin fondo */
+.lbpdf-tema-transparente .fbm-visor-wrap,
+.lbpdf-tema-transparente .fbm-visor,
+.lbpdf-tema-transparente .fbm-cargando {
+    background: transparent !important;
+}
+
+/* Spinner en modo transparente — tono neutro */
+.lbpdf-tema-transparente .fbm-spinner {
+    border-color: rgba(0, 0, 0, 0.12);
+    border-top-color: currentColor;
+}
+
+/* Barra de progreso translúcida */
+.lbpdf-tema-transparente .fbm-progreso-barra {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* Panel de miniaturas con vidrio */
+.lbpdf-tema-transparente .fbm-panel-miniaturas {
+    background:            rgba(255, 255, 255, 0.15);
+    backdrop-filter:       blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-right:          1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Botones en modo transparente */
+.lbpdf-tema-transparente .fbm-btn {
+    background:   rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
+    color:        inherit;
+}
+.lbpdf-tema-transparente .fbm-btn:hover {
+    background:   rgba(255, 255, 255, 0.26);
+    border-color: rgba(255, 255, 255, 0.40);
+}
+
+/* Texto de info y zoom hereda el color del tema de la página */
+.lbpdf-tema-transparente .fbm-pagina-info,
+.lbpdf-tema-transparente .fbm-zoom-nivel {
+    color: inherit;
+    opacity: 0.65;
+}
+
+/* Resultados de búsqueda con fondo translúcido */
+.lbpdf-tema-transparente .fbm-search-resultados {
+    background:            rgba(255, 255, 255, 0.15);
+    backdrop-filter:       blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-top:            1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Barra de info transparente */
+.lbpdf-tema-transparente .fbm-info-bar {
+    background: rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+

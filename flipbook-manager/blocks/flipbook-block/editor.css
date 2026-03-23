@@ -1,0 +1,70 @@
+/*
+ * Archivo: blocks/flipbook-block/editor.css
+ * Estilos del bloque Flipbook DENTRO del editor Gutenberg
+ * (No afecta al frontend, solo lo que ve el editor)
+ */
+
+/* ---- Contenedor del bloque en el editor ---- */
+.fbm-bloque-editor {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ---- Estado: Cargando la lista de flipbooks ---- */
+.fbm-editor-loading {
+    display:     flex;
+    align-items: center;
+    gap:         10px;
+    padding:     20px;
+    color:       #757575;
+    font-size:   14px;
+    border:      2px dashed #ddd;
+    border-radius: 8px;
+}
+
+/* ---- Preview cuando ya se eligió un flipbook ---- */
+.fbm-editor-preview {
+    display:         flex;
+    flex-direction:  column;
+    align-items:     center;
+    justify-content: center;
+    padding:         32px 24px;
+    background:      linear-gradient(135deg, #1e2a3a 0%, #111827 100%);
+    border-radius:   8px;
+    text-align:      center;
+    gap:             8px;
+    min-height:      180px;
+}
+
+.fbm-editor-preview-icono {
+    font-size: 48px;
+    line-height: 1;
+}
+
+.fbm-editor-preview-titulo {
+    margin:      0;
+    font-size:   18px;
+    font-weight: 600;
+    color:       #f3f4f6;
+}
+
+.fbm-editor-preview-info {
+    margin:    0;
+    font-size: 12px;
+    color:     #6b7280;
+}
+
+.fbm-editor-preview-shortcode {
+    margin:        0;
+    font-family:   monospace;
+    font-size:     12px;
+    color:         #60a5fa;
+    background:    rgba(96, 165, 250, 0.1);
+    padding:       4px 10px;
+    border-radius: 4px;
+}
+
+.fbm-editor-preview-nota {
+    margin:    0;
+    font-size: 12px;
+    color:     #4ade80;
+}

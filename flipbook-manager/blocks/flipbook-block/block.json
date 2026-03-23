@@ -1,0 +1,35 @@
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+
+    "name":        "flipbook-manager/flipbook",
+    "version":     "1.0.0",
+    "title":       "Flipbook",
+    "category":    "media",
+    "icon":        "book-alt",
+    "description": "Muestra una publicación tipo revista con efecto de volteo de página.",
+    "keywords":    ["flipbook", "revista", "pdf", "publicacion"],
+
+    "supports": {
+        "html":  false,
+        "align": ["wide", "full"]
+    },
+
+    "attributes": {
+        "flipbookId": {
+            "type":    "number",
+            "default": 0
+        },
+        "ancho": {
+            "type":    "number",
+            "default": 900
+        },
+        "alto": {
+            "type":    "number",
+            "default": 600
+        }
+    },
+
+    "editorScript": "file:./index.js",
+    "editorStyle":  "file:./editor.css"
+}
