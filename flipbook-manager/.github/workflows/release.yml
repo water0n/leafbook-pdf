@@ -1,0 +1,32 @@
+name: Build and Release Plugin ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare package
+        run: |
+          mkdir package
+          cp -r flipbook-manager package/flipbook-manager
+
+      - name: Create ZIP
+        run: |
+          cd package
+          zip -r ../leafbook-pdf.zip flipbook-manager
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: leafbook-pdf.zip
