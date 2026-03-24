@@ -53,12 +53,7 @@ class Flipbook_Shortcode {
         wp_enqueue_style( 'fbm-visor' );
         wp_enqueue_script( 'fbm-visor' );
 
-        // Llama fbmIniciarTodos() al final del footer — garantiza que el DOM y los
-        // datos fbmData_X ya existen, independientemente del orden de carga de scripts.
-        // add_inline_script es idempotente por handle: WordPress acumula los fragmentos
-        // pero el script solo se registra una vez por handle, así que llamar esto
-        // múltiples veces (varios shortcodes en la misma página) no duplica la llamada.
-        wp_add_inline_script( 'fbm-visor', 'document.addEventListener("DOMContentLoaded",function(){ if(typeof window.fbmIniciarTodos==="function") window.fbmIniciarTodos(); });', 'after' );
+        // visor.js maneja su propio init defensivo (funciona en iframe y shortcode).
 
         $tema = $cfg['tema_botones'] ?? 'oscuro';
         wp_localize_script( 'fbm-visor', 'fbmData_' . $pid, array(
@@ -68,7 +63,6 @@ class Flipbook_Shortcode {
             'alto'      => $alto,
             'autoplay'  => $autoplay,
             'workerSrc' => FBM_PLUGIN_URL . 'assets/js/pdf.worker.min.js?v=' . FBM_VERSION,
-            'buscar'    => $cfg['btn_buscar'],
             'tema'      => $tema,
             'calidad'   => floatval( $cfg['calidad'] ?? 0.85 ),
             'escala'    => floatval( $cfg['escala'] ?? 1.5 ),
@@ -105,17 +99,6 @@ class Flipbook_Shortcode {
             <div class="fbm-controles" id="fbm-controles-<?php echo $pid; ?>">
 
                 <?php // Búsqueda (se muestra a la izquierda si activa) ?>
-                <?php if ($cfg['btn_buscar'] === '1'): ?>
-                <div class="fbm-ctrl-grupo fbm-ctrl-buscar" id="fbm-ctrl-buscar-<?php echo $pid; ?>">
-                    <div class="fbm-search-wrap" id="fbm-search-wrap-<?php echo $pid; ?>">
-                        <input type="text" class="fbm-search-input" id="fbm-search-input-<?php echo $pid; ?>"
-                               placeholder="Buscar en PDF…" data-id="<?php echo $pid; ?>">
-                        <span class="fbm-search-info" id="fbm-search-info-<?php echo $pid; ?>"></span>
-                        <button class="fbm-btn fbm-btn-search-clear" onclick="fbmLimpiarBusqueda(<?php echo $pid; ?>)" title="Limpiar">✕</button>
-                    </div>
-                </div>
-                <?php endif; ?>
-
                 <?php // Grupo centro: navegación ?>
                 <div class="fbm-ctrl-grupo">
                     <?php if ($cfg['btn_primera'] === '1'): ?>
@@ -216,12 +199,6 @@ class Flipbook_Shortcode {
                 </div>
             </div>
 
-            <?php // ── Panel de búsqueda de resultados ── ?>
-            <?php if ($cfg['btn_buscar'] === '1'): ?>
-            <div class="fbm-search-resultados" id="fbm-search-res-<?php echo $pid; ?>" style="display:none">
-                <div class="fbm-search-res-lista" id="fbm-search-res-lista-<?php echo $pid; ?>"></div>
-            </div>
-            <?php endif; ?>
 
         </div><!-- .fbm-contenedor-externo -->
         <?php

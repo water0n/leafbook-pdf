@@ -1,14 +1,20 @@
 /**
- * visor.js — LeafBook PDF v1.4.15
+ * visor.js — LeafBook PDF v1.5.0
  *
- * FIXES:
- *  1. El flipbook se monta sobre un contenedor HTML real y
- *     loadFromImages() recibe data-URLs (string[]) como espera StPageFlip.
+ * CORRECCIONES v1.5.0:
+ *  1. INIT BUG (iframe): fbmIniciarTodos() ahora usa un patrón defensivo
+ *     que funciona tanto si DOMContentLoaded ya disparó (iframe) como si
+ *     aún no lo ha hecho (shortcode en página normal).
  *
- *  2. Se conserva una precarga ligera y luego se instancia el libro con
- *     double-rAF para asegurar layout estable.
+ *  2. CENTRADO: La primera página (portada) ya no se desplaza a la derecha.
  *
- *  3. fbmIniciarTodos() idempotente invocada desde wp_add_inline_script al footer.
+ *  3. ZOOM PIXELADO: Re-render HD desde el PDF a la escala exacta del zoom.
+ *     Imágenes base más ligeras para carga inicial rápida.
+ *
+ *  4. PAN CONTENIDO: Arrastre restringido al área del visor.
+ *     Al salir de fullscreen la vista se recentra.
+ *
+ *  5. BÚSQUEDA eliminada.
  */
 (function () {
     'use strict';
@@ -26,6 +32,17 @@
         });
     }
 
+    // ══════════════════════════════════════════════════════
+    // INIT — patrón defensivo para iframe Y shortcode
+    //
+    // PROBLEMA RESUELTO: en el iframe los scripts van al final del <body>,
+    // por lo que DOMContentLoaded ya disparó cuando visor.js se evalúa.
+    // Usar solo addEventListener('DOMContentLoaded') hace que nunca se llame
+    // fbmIniciarTodos() → visor atascado en "Cargando…".
+    //
+    // SOLUCIÓN: si el DOM ya está listo → llamar con setTimeout(0).
+    //           si aún no → esperar al evento DOMContentLoaded.
+    // ══════════════════════════════════════════════════════
     window.fbmIniciarTodos = function () {
         document.querySelectorAll('.fbm-visor').forEach(function (elVisor) {
             var id    = elVisor.dataset.id;
@@ -38,9 +55,11 @@
     };
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () { window.fbmIniciarTodos(); });
+        document.addEventListener('DOMContentLoaded', window.fbmIniciarTodos);
     } else {
-        window.fbmIniciarTodos();
+        // DOM ya listo (caso iframe): ejecutar en el siguiente tick para
+        // garantizar que todos los scripts inline anteriores ya corrieron.
+        setTimeout(window.fbmIniciarTodos, 0);
     }
 
     // ══════════════════════════════════════════════════════
@@ -50,13 +69,16 @@
         if (typeof pdfjsLib === 'undefined') {
             return mostrarError(id, 'PDF.js no cargó. Verifica tu conexión a internet.');
         }
+        if (typeof St === 'undefined' || typeof St.PageFlip === 'undefined') {
+            return mostrarError(id, 'page-flip.js no cargó. Verifica tu conexión a internet.');
+        }
 
         pdfjsLib.GlobalWorkerOptions.workerSrc = datos.workerSrc;
 
-        var ancho = parseInt(datos.ancho, 10) || 900;
-        var alto  = parseInt(datos.alto,  10) || 600;
-        var calidadRender = Math.min(1, Math.max(0.5, parseFloat(datos.calidad) || 0.85));
-        var escalaRender  = Math.min(3, Math.max(1, parseFloat(datos.escala) || 1.5));
+        var ancho      = parseInt(datos.ancho,    10) || 900;
+        var alto       = parseInt(datos.alto,     10) || 600;
+        var escalaBase = Math.min(2, Math.max(1,  parseFloat(datos.escala)   || 1.5));
+        var calidad    = Math.min(1, Math.max(0.6, parseFloat(datos.calidad) || 0.85));
 
         setProg(id, 5);
         setTxt(id, 'Conectando…');
@@ -64,56 +86,52 @@
         function cargarConRetry(url, intento) {
             intento = intento || 0;
             return pdfjsLib.getDocument({ url: url, withCredentials: false }).promise
-                .catch(function(e) {
+                .catch(function (e) {
                     if (intento < 2 && e.message && /fetch|network|Unexpected/i.test(e.message)) {
-                        setTxt(id, 'Reintentando… (' + (intento+1) + '/2)');
-                        return new Promise(function(ok){ setTimeout(ok, 1500*(intento+1)); })
-                            .then(function(){ return cargarConRetry(url, intento+1); });
+                        setTxt(id, 'Reintentando… (' + (intento + 1) + '/2)');
+                        return new Promise(function (ok) { setTimeout(ok, 1500 * (intento + 1)); })
+                            .then(function () { return cargarConRetry(url, intento + 1); });
                     }
                     throw e;
                 });
         }
 
-        var _pdfDoc = null;  // guardado para re-render HD en zoom
+        var _pdfDoc = null;
 
         cargarConRetry(datos.pdfUrl)
-        .then(function (doc) {
-            _pdfDoc = doc;
-            var total = doc.numPages;
-            setTxt(id, 'Procesando ' + total + ' páginas…');
-            if (datos.buscar === '1') fbmIndexarTexto(id, doc);
-            return renderTodas(doc, total, ancho, alto, id, { calidad: calidadRender, escala: escalaRender, zoomMax: 3 });
-        })
-        .then(function (dataUrls) {
-            setTxt(id, 'Preparando páginas…');
-            return precargarImagenes(dataUrls, id);
-        })
-        .then(function (imageSources) {
-            setTxt(id, 'Montando visor…');
-            crearFlipbook(id, imageSources, ancho, alto, elVisor, datos, _pdfDoc, escalaRender);
-        })
-        .catch(function (e) {
-            console.error('[LeafBook PDF]', e);
-            var msg = '';
-            if      (e.name === 'MissingPDFException')                msg = 'Archivo no encontrado (404). Verifica que el PDF existe en la Biblioteca de Medios.';
-            else if (e.name === 'InvalidPDFException')                msg = 'El archivo no es un PDF válido.';
-            else if (e.message && /fetch|network|load/i.test(e.message)) msg = 'No se pudo descargar el PDF. Verifica la conexión o los permisos del archivo.';
-            else                                                       msg = 'Error al cargar: ' + (e.message || e);
-            mostrarError(id, msg);
-        });
+            .then(function (doc) {
+                _pdfDoc = doc;
+                var total = doc.numPages;
+                setTxt(id, 'Procesando ' + total + ' páginas…');
+                return renderTodas(doc, total, ancho, alto, id, escalaBase, calidad);
+            })
+            .then(function (dataUrls) {
+                setTxt(id, 'Preparando páginas…');
+                return precargarImagenes(dataUrls, id);
+            })
+            .then(function (imageSources) {
+                setTxt(id, 'Montando visor…');
+                crearFlipbook(id, imageSources, ancho, alto, elVisor, datos, _pdfDoc, escalaBase);
+            })
+            .catch(function (e) {
+                console.error('[LeafBook PDF]', e);
+                var msg = '';
+                if      (e.name === 'MissingPDFException')                   msg = 'Archivo no encontrado (404). Verifica que el PDF existe en la Biblioteca de Medios.';
+                else if (e.name === 'InvalidPDFException')                    msg = 'El archivo no es un PDF válido.';
+                else if (e.message && /fetch|network|load/i.test(e.message)) msg = 'No se pudo descargar el PDF. Verifica la conexión o los permisos del archivo.';
+                else                                                          msg = 'Error al cargar: ' + (e.message || e);
+                mostrarError(id, msg);
+            });
     }
 
     // ══════════════════════════════════════════════════════
     // PRE-CARGA DE IMÁGENES
-    // Calienta la decodificación del browser, pero loadFromImages() debe
-    // recibir string[] porque StPageFlip crea internamente sus Image().
     // ══════════════════════════════════════════════════════
     function precargarImagenes(dataUrls, id) {
-        var total = dataUrls.length;
+        var total    = dataUrls.length;
         var cargadas = 0;
-
         return Promise.all(dataUrls.map(function (src, idx) {
-            return new Promise(function (resolve, reject) {
+            return new Promise(function (resolve) {
                 var img    = new Image();
                 img.onload = function () {
                     cargadas++;
@@ -121,7 +139,6 @@
                     resolve(src);
                 };
                 img.onerror = function () {
-                    // Si falla un decode, igual resolvemos para no bloquear todo
                     console.warn('[LeafBook PDF] Error precargando imagen', idx);
                     resolve(src);
                 };
@@ -132,8 +149,10 @@
 
     // ══════════════════════════════════════════════════════
     // RENDERIZAR PÁGINAS → array de data URLs
+    // Escala base moderada → carga rápida.
+    // El HD se genera solo cuando el usuario hace zoom.
     // ══════════════════════════════════════════════════════
-    function renderTodas(doc, total, anchoVisor, altoVisor, id, renderCfg) {
+    function renderTodas(doc, total, anchoVisor, altoVisor, id, escalaBase, calidad) {
         var imgs     = [];
         var chain    = Promise.resolve();
         var anchoPag = Math.floor(anchoVisor / 2);
@@ -141,33 +160,29 @@
         for (var i = 1; i <= total; i++) {
             (function (n) {
                 chain = chain.then(function () {
-                    return renderPagina(doc, n, anchoPag, altoVisor, renderCfg).then(function (dataUrl) {
-                        imgs.push(dataUrl);
-                        setProg(id, Math.round(5 + (n / total) * 80));
-                        setTxt(id, 'Página ' + n + ' de ' + total + '…');
-                    });
+                    return renderPagina(doc, n, anchoPag, altoVisor, escalaBase, calidad)
+                        .then(function (dataUrl) {
+                            imgs.push(dataUrl);
+                            setProg(id, Math.round(5 + (n / total) * 80));
+                            setTxt(id, 'Página ' + n + ' de ' + total + '…');
+                        });
                 });
             })(i);
         }
         return chain.then(function () { return imgs; });
     }
 
-    function renderPagina(doc, n, anchoPag, altoPag, renderCfg) {
-        renderCfg = renderCfg || {};
-        var calidad = Math.min(1, Math.max(0.5, parseFloat(renderCfg.calidad) || 0.85));
-        var escalaUsuario = Math.min(3, Math.max(1, parseFloat(renderCfg.escala) || 1.5));
-        var zoomMax = Math.max(1, parseFloat(renderCfg.zoomMax) || 2);
-
+    function renderPagina(doc, n, anchoPag, altoPag, escalaBase, calidad) {
         return doc.getPage(n).then(function (pag) {
-            var vp0 = pag.getViewport({ scale: 1 });
+            var vp0      = pag.getViewport({ scale: 1 });
             var fitScale = Math.min(anchoPag / vp0.width, altoPag / vp0.height);
-            var escalaDeseada = fitScale * escalaUsuario * zoomMax;
-            var maxPixels = calidad >= 0.98 ? 20000000 : (calidad >= 0.9 ? 16000000 : 12000000);
-            var maxScalePorPixeles = Math.sqrt(maxPixels / (vp0.width * vp0.height));
-            var escalaFinal = Math.min(escalaDeseada, maxScalePorPixeles);
-            var vp = pag.getViewport({ scale: escalaFinal });
+            var escalaFinal = fitScale * escalaBase;
+            // Límite 10MP para carga inicial rápida
+            var maxScale = Math.sqrt(10000000 / (vp0.width * vp0.height));
+            escalaFinal  = Math.min(escalaFinal, maxScale);
 
-            var canvas  = document.createElement('canvas');
+            var vp     = pag.getViewport({ scale: escalaFinal });
+            var canvas = document.createElement('canvas');
             canvas.width  = Math.round(vp.width);
             canvas.height = Math.round(vp.height);
             var ctx = canvas.getContext('2d', { alpha: false });
@@ -175,7 +190,6 @@
             ctx.imageSmoothingQuality = 'high';
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
             return pag.render({ canvasContext: ctx, viewport: vp }).promise
                 .then(function () {
                     return calidad >= 0.9
@@ -196,27 +210,21 @@
         var libroExistente = document.getElementById('fbm-book-' + id);
         if (libroExistente) libroExistente.remove();
 
-        // StPageFlip necesita un elemento HTML raíz, no un canvas manual.
         var book = document.createElement('div');
-        book.id = 'fbm-book-' + id;
+        book.id        = 'fbm-book-' + id;
         book.className = 'fbm-libro';
-        // Con size:'fixed', fijar dimensiones exactas en el contenedor del libro
         book.style.cssText = 'position:relative;width:' + ancho + 'px;height:' + alto + 'px;margin:0 auto;flex-shrink:0;';
         elVisor.appendChild(book);
 
         var panLayer = document.createElement('div');
-        panLayer.id = 'fbm-pan-' + id;
+        panLayer.id        = 'fbm-pan-' + id;
         panLayer.className = 'fbm-pan-layer';
         panLayer.setAttribute('aria-hidden', 'true');
         elVisor.appendChild(panLayer);
 
-        // Double rAF: garantiza layout completo antes de que StPageFlip lea getBoundingClientRect
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
 
-                // FIX: size:'fixed' con autoSize:false garantiza que las páginas
-                // se rendericen exactamente al aspect ratio del PDF sin deformación.
-                // El contenedor .fbm-libro se escala vía transform (zoom/pan), no stretch.
                 var fb = new St.PageFlip(book, {
                     width:               anchoPag,
                     height:              alto,
@@ -234,8 +242,8 @@
                 instancias[id] = {
                     flipBook:     fb,
                     imagenes:     imageSources,
-                    imagenesBase: imageSources.slice(),  // copia de las imágenes base
-                    pdfDoc:       pdfDoc,                // referencia al PDF para re-render HD
+                    imagenesBase: imageSources.slice(),
+                    pdfDoc:       pdfDoc,
                     libroEl:      book,
                     panLayer:     panLayer,
                     zoom:         1,
@@ -245,26 +253,20 @@
                     totalPaginas: imageSources.length,
                     ancho:        ancho,
                     alto:         alto,
-                    escalaBase:   escalaBase || 1.5,
+                    escalaBase:   escalaBase,
                     hdTimer:      null,
                     hdZoom:       0,
                 };
 
                 fb.on('flip', function (e) {
                     var inst = instancias[id];
-                    if (inst) {
-                        inst.panX = 0;
-                        inst.panY = 0;
-                        inst.isPanning = false;
-                    }
+                    if (inst) { inst.panX = 0; inst.panY = 0; inst.isPanning = false; }
                     setInfo(id, 'Pág. ' + (e.data + 1) + ' / ' + imageSources.length);
                     resaltarMiniatura(id, e.data);
                     actualizarVista(id);
                 });
 
-                fb.on('changeOrientation', function () {
-                    refrescarFlipbook(id);
-                });
+                fb.on('changeOrientation', function () { refrescarFlipbook(id); });
 
                 fb.on('init', function () {
                     var spin = document.getElementById('fbm-cargando-' + id);
@@ -295,9 +297,8 @@
                 conectarSwipe(id, elVisor, fb);
                 conectarArrastre(id, panLayer);
                 fb.loadFromImages(imageSources);
-
-            }); // rAF 2
-        }); // rAF 1
+            });
+        });
     }
 
     // ══════════════════════════════════════════════════════
@@ -306,25 +307,19 @@
     function buildMiniaturas(id, imgs) {
         var grid = document.getElementById('fbm-min-grid-' + id);
         if (!grid) return;
-
         imgs.forEach(function (imgObj, idx) {
-            var thumb     = document.createElement('div');
+            var thumb       = document.createElement('div');
             thumb.className = 'fbm-miniatura';
             thumb.title     = 'Página ' + (idx + 1);
-
-            // Usar el mismo objeto Image pre-cargado (ya tiene src)
-            var img       = document.createElement('img');
-            img.src       = imgObj.src || imgObj;
-            img.loading   = 'lazy';
-            img.draggable = false;
-
-            var num       = document.createElement('span');
+            var img         = document.createElement('img');
+            img.src         = imgObj.src || imgObj;
+            img.loading     = 'lazy';
+            img.draggable   = false;
+            var num         = document.createElement('span');
             num.textContent = idx + 1;
-
             thumb.appendChild(img);
             thumb.appendChild(num);
             grid.appendChild(thumb);
-
             thumb.addEventListener('click', function () {
                 var inst = instancias[id];
                 if (inst) inst.flipBook.flip(idx);
@@ -349,43 +344,35 @@
     function conectarBotones(id) {
         var ctrl = document.getElementById('fbm-controles-' + id);
         if (!ctrl) return;
-
         ctrl.querySelectorAll('[data-accion]').forEach(function (btn) {
             btn.addEventListener('click', function (e) {
                 e.preventDefault();
                 var inst   = instancias[id];
                 var accion = btn.dataset.accion;
                 switch (accion) {
-                    case 'primera':    if(inst) inst.flipBook.flip(0);                      break;
-                    case 'anterior':   if(inst) inst.flipBook.flipPrev();                   break;
-                    case 'siguiente':  if(inst) inst.flipBook.flipNext();                   break;
-                    case 'ultima':     if(inst) inst.flipBook.flip(inst.totalPaginas - 1); break;
-                    case 'zoom-mas':   hacerZoom(id, +1);                                   break;
-                    case 'zoom-menos': hacerZoom(id, -1);                                   break;
-                    case 'miniaturas': toggleMiniaturas(id);                                break;
-                    case 'fullscreen': hacerFullscreen(id);                                 break;
-                    case 'compartir':  hacerCompartir(btn);                                 break;
-                    case 'imprimir':   hacerImprimir(btn);                                  break;
+                    case 'primera':    if (inst) inst.flipBook.flip(0);                      break;
+                    case 'anterior':   if (inst) inst.flipBook.flipPrev();                   break;
+                    case 'siguiente':  if (inst) inst.flipBook.flipNext();                   break;
+                    case 'ultima':     if (inst) inst.flipBook.flip(inst.totalPaginas - 1); break;
+                    case 'zoom-mas':   hacerZoom(id, +1);                                    break;
+                    case 'zoom-menos': hacerZoom(id, -1);                                    break;
+                    case 'miniaturas': toggleMiniaturas(id);                                 break;
+                    case 'fullscreen': hacerFullscreen(id);                                  break;
+                    case 'compartir':  hacerCompartir(btn);                                  break;
+                    case 'imprimir':   hacerImprimir(btn);                                   break;
                 }
             });
         });
     }
 
-
     // ══════════════════════════════════════════════════════
     // RE-RENDER HD AL ZOOM
-    // Cuando el usuario hace zoom, re-renderiza las páginas visibles
-    // desde el PDF original a la escala exacta → sin borrosidad.
-    // Cuando vuelve a zoom 1x restaura las imágenes base (más ligeras).
     // ══════════════════════════════════════════════════════
     function programarReRenderHD(id) {
         var inst = instancias[id];
         if (!inst) return;
-
-        // Cancelar render pendiente
         if (inst.hdTimer) { clearTimeout(inst.hdTimer); inst.hdTimer = null; }
 
-        // Si volvemos a zoom 1x, restaurar imágenes base inmediatamente
         if (inst.zoom <= 1.0001) {
             if (inst.hdZoom > 0 && inst.imagenesBase) {
                 inst.hdZoom = 0;
@@ -394,64 +381,51 @@
             return;
         }
 
-        // Debounce 350ms — esperar a que el usuario termine de ajustar el zoom
         inst.hdTimer = setTimeout(function () {
             inst.hdTimer = null;
             reRenderizarHD(id);
-        }, 350);
+        }, 400);
     }
 
     function reRenderizarHD(id) {
         var inst = instancias[id];
         if (!inst || !inst.pdfDoc || inst.zoom <= 1.0001) return;
-        if (inst.hdZoom === inst.zoom) return; // ya está al nivel correcto
+        if (inst.hdZoom === inst.zoom) return;
 
-        // FIX: detectar modo página única vs doble según StPageFlip
         var modoSimple = inst.flipBook && typeof inst.flipBook.getOrientation === 'function'
             ? inst.flipBook.getOrientation() === 'portrait'
             : inst.ancho < 600;
-        var anchoPag = modoSimple ? inst.ancho : Math.floor(inst.ancho / 2);
+        var anchoPag   = modoSimple ? inst.ancho : Math.floor(inst.ancho / 2);
         var zoomActual = inst.zoom;
+        var dpr        = Math.min(window.devicePixelRatio || 1, 2);
+        // Escala HD = base × zoom × DPR → siempre más nítido que la imagen base
+        var escalaHD   = inst.escalaBase * zoomActual * dpr;
 
-        // FIX: escalaHD debe superar la escala base para que el re-render sea realmente más nítido.
-        // Fórmula: escalaBase × zoom × DPR — siempre mayor que la imagen base
-        var dpr = Math.min(window.devicePixelRatio || 1, 2);
-        var escalaBase = inst.escalaBase || 1.5;
-        var escalaHD = escalaBase * zoomActual * dpr;
-        var renderCfg = { calidad: 1.0, escalaHD: escalaHD };
-
-        // Averiguar qué páginas están visibles ahora
         var paginasVisibles = getPaginasVisibles(inst);
-
-        // Renderizar solo las páginas visibles primero, luego el resto
         var total = inst.totalPaginas;
         var ordenRender = [];
         for (var i = 0; i < total; i++) {
-            if (paginasVisibles.indexOf(i) !== -1) ordenRender.unshift(i); // visibles al frente
+            if (paginasVisibles.indexOf(i) !== -1) ordenRender.unshift(i);
             else ordenRender.push(i);
         }
 
-        // Clonar array base para ir reemplazando
         var nuevasImagenes = inst.imagenesBase.slice();
-        var zoomCapturado = zoomActual;
+        var zoomCapturado  = zoomActual;
+        var chain          = Promise.resolve();
 
-        // Renderizar secuencialmente
-        var chain = Promise.resolve();
         ordenRender.forEach(function (n) {
             chain = chain.then(function () {
-                // Si el zoom cambió mientras renderizábamos, abortar
                 if (inst.zoom !== zoomCapturado || inst.zoom <= 1.0001) {
                     return Promise.reject('zoom-changed');
                 }
                 return renderPaginaHD(inst.pdfDoc, n + 1, anchoPag, inst.alto, escalaHD)
-                .then(function (dataUrl) {
-                    if (inst.zoom !== zoomCapturado) return;
-                    nuevasImagenes[n] = dataUrl;
-                    // Si es página visible, recargar inmediatamente
-                    if (paginasVisibles.indexOf(n) !== -1) {
-                        inst.flipBook.loadFromImages(nuevasImagenes.slice());
-                    }
-                });
+                    .then(function (dataUrl) {
+                        if (inst.zoom !== zoomCapturado) return;
+                        nuevasImagenes[n] = dataUrl;
+                        if (paginasVisibles.indexOf(n) !== -1) {
+                            inst.flipBook.loadFromImages(nuevasImagenes.slice());
+                        }
+                    });
             });
         });
 
@@ -468,14 +442,11 @@
 
     function renderPaginaHD(doc, n, anchoPag, altoPag, escalaHD) {
         return doc.getPage(n).then(function (pag) {
-            var vp0 = pag.getViewport({ scale: 1 });
+            var vp0      = pag.getViewport({ scale: 1 });
             var fitScale = Math.min(anchoPag / vp0.width, altoPag / vp0.height);
-            // Limitar a ~20MP para no agotar memoria
-            // FIX: aumentamos límite a 40MP para soportar zoom HD nítido (antes 20MP era insuficiente)
             var maxScale = Math.sqrt(40000000 / (vp0.width * vp0.height));
             var escalaFinal = Math.min(fitScale * escalaHD, maxScale);
             var vp = pag.getViewport({ scale: escalaFinal });
-
             var canvas = document.createElement('canvas');
             canvas.width  = Math.round(vp.width);
             canvas.height = Math.round(vp.height);
@@ -484,7 +455,6 @@
             ctx.imageSmoothingQuality = 'high';
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
             return pag.render({ canvasContext: ctx, viewport: vp }).promise
                 .then(function () { return canvas.toDataURL('image/png'); });
         });
@@ -496,7 +466,6 @@
         if (typeof inst.flipBook.getCurrentPageIndex === 'function') {
             idx = inst.flipBook.getCurrentPageIndex() || 0;
         }
-        // En modo libro: páginas idx y idx+1 son visibles
         var visibles = [idx];
         if (idx + 1 < inst.totalPaginas) visibles.push(idx + 1);
         return visibles;
@@ -505,23 +474,12 @@
     // ══════════════════════════════════════════════════════
     // ZOOM
     // ══════════════════════════════════════════════════════
-    var niveles = [1, 1.25, 1.5, 2, 2.5, 3];  // mínimo 100% — el zoom-out no tiene sentido en un flipbook
+    var niveles = [1, 1.25, 1.5, 2, 2.5, 3];
 
-    function getLibroEl(id) {
-        return document.getElementById('fbm-book-' + id);
-    }
-
-    function getWrapEl(id) {
-        return document.getElementById('fbm-wrap-' + id);
-    }
-
-    function getVisorWrapEl(id) {
-        return document.getElementById('fbm-visor-wrap-' + id);
-    }
-
-    function getPanLayerEl(id) {
-        return document.getElementById('fbm-pan-' + id);
-    }
+    function getLibroEl(id)    { return document.getElementById('fbm-book-'  + id); }
+    function getWrapEl(id)     { return document.getElementById('fbm-wrap-'  + id); }
+    function getVisorEl(id)    { return document.getElementById('fbm-visor-' + id); }
+    function getPanLayerEl(id) { return document.getElementById('fbm-pan-'   + id); }
 
     function esFullscreenId(id) {
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
@@ -531,19 +489,16 @@
     function resetPan(id) {
         var inst = instancias[id];
         if (!inst) return;
-        inst.panX = 0;
-        inst.panY = 0;
-        inst.isPanning = false;
+        inst.panX = 0; inst.panY = 0; inst.isPanning = false;
         var panLayer = getPanLayerEl(id);
         if (panLayer) panLayer.classList.remove('is-dragging');
     }
 
     function sincronizarModoPan(id) {
-        var inst = instancias[id];
+        var inst     = instancias[id];
         var panLayer = getPanLayerEl(id);
-        var visor = document.getElementById('fbm-visor-' + id);
-        var activo = !!(inst && panLayer && inst.zoom > 1.0001);
-
+        var visor    = getVisorEl(id);
+        var activo   = !!(inst && inst.zoom > 1.0001);
         if (panLayer) {
             panLayer.classList.toggle('is-active', activo);
             panLayer.setAttribute('aria-hidden', activo ? 'false' : 'true');
@@ -553,105 +508,89 @@
     }
 
     function sincronizarLayoutViewport(id) {
-        var inst = instancias[id];
-        var wrap = getWrapEl(id);
-        var visor = document.getElementById('fbm-visor-' + id);
-        var visorWrap = getVisorWrapEl(id);
-        var book = getLibroEl(id);
-        if (!inst || !wrap || !visor || !visorWrap || !book) return;
+        var inst  = instancias[id];
+        var wrap  = getWrapEl(id);
+        var visor = getVisorEl(id);
+        var book  = getLibroEl(id);
+        if (!inst || !wrap || !visor || !book) return;
 
         var esFS = esFullscreenId(id);
         wrap.classList.toggle('fbm-wrap--fullscreen', esFS);
         wrap.style.maxWidth = esFS ? 'none' : inst.ancho + 'px';
-        wrap.style.width = esFS ? '100vw' : '';
-        wrap.style.height = esFS ? (window.innerHeight + 'px') : '';
+        wrap.style.width    = esFS ? '100vw' : '';
+        wrap.style.height   = esFS ? (window.innerHeight + 'px') : '';
         book.style.maxWidth = 'none';
 
-        if (!esFS) {
-            visor.style.height = '';
-            return;
-        }
+        if (!esFS) { visor.style.height = ''; return; }
 
-        var usados = 0;
+        var usados    = 0;
         var controles = document.getElementById('fbm-controles-' + id);
-        var infoBar = wrap.querySelector('.fbm-info-bar');
-        var search = document.getElementById('fbm-search-res-' + id);
-
+        var infoBar   = wrap.querySelector('.fbm-info-bar');
         if (controles) usados += controles.offsetHeight;
-        if (infoBar) usados += infoBar.offsetHeight;
-        if (search && search.style.display !== 'none') usados += search.offsetHeight;
-
+        if (infoBar)   usados += infoBar.offsetHeight;
         visor.style.height = Math.max(260, window.innerHeight - usados) + 'px';
     }
 
-    function getOffsetPaginaUnica(inst, bounds) {
-        if (!inst || !bounds || !inst.flipBook) return 0;
+    // ── Corrección de centrado: portada / contraportada ──────────────
+    // showCover:true hace que la portada se dibuje en la mitad derecha
+    // del canvas de ancho doble. Este offset lo corrige.
+    function getOffsetPaginaUnica(inst) {
+        if (!inst || !inst.flipBook) return 0;
         if (typeof inst.flipBook.getOrientation !== 'function') return 0;
-        if (inst.flipBook.getOrientation() !== 'landscape') return 0;
+        if (inst.flipBook.getOrientation() === 'portrait') return 0;
 
-        var idx = typeof inst.flipBook.getCurrentPageIndex === 'function'
-            ? inst.flipBook.getCurrentPageIndex()
-            : 0;
-        var pageWidth = bounds.pageWidth || Math.floor((bounds.width || inst.ancho || 0) / 2);
+        var idx       = typeof inst.flipBook.getCurrentPageIndex === 'function'
+                        ? (inst.flipBook.getCurrentPageIndex() || 0) : 0;
+        var pageWidth = Math.floor(inst.ancho / 2);
 
         if (idx === 0) return -Math.round(pageWidth / 2);
-        if (idx >= inst.totalPaginas - 1) return Math.round(pageWidth / 2);
+        if (idx >= inst.totalPaginas - 1 && inst.totalPaginas % 2 === 0) return Math.round(pageWidth / 2);
         return 0;
     }
 
-    function clampPan(id, bounds) {
-        var inst = instancias[id];
-        var visor = document.getElementById('fbm-visor-' + id);
+    // ── Clamp del pan dentro del área visible del visor ──────────────
+    function clampPan(id) {
+        var inst  = instancias[id];
+        var visor = getVisorEl(id);
         if (!inst || !visor) return;
 
-        if (!bounds || inst.zoom <= 1.0001) {
-            inst.panX = 0;
-            inst.panY = 0;
-            return;
-        }
+        if (inst.zoom <= 1.0001) { inst.panX = 0; inst.panY = 0; return; }
 
-        var viewportW = visor.clientWidth || bounds.width || 0;
-        var viewportH = visor.clientHeight || bounds.height || 0;
-        var scaledW = (bounds.width || viewportW) * inst.zoom;
-        var scaledH = (bounds.height || viewportH) * inst.zoom;
-        var baseOffsetX = getOffsetPaginaUnica(inst, bounds);
+        var viewportW = visor.clientWidth  || inst.ancho;
+        var viewportH = visor.clientHeight || inst.alto;
+        var scaledW   = inst.ancho * inst.zoom;
+        var scaledH   = inst.alto  * inst.zoom;
 
         if (scaledW <= viewportW) {
             inst.panX = 0;
         } else {
-            var maxPanX = Math.max(0, Math.round((scaledW - viewportW) / 2));
-            var minX = -maxPanX - baseOffsetX;
-            var maxX = maxPanX - baseOffsetX;
-            inst.panX = Math.max(minX, Math.min(maxX, inst.panX || 0));
+            var maxPanX = Math.round((scaledW - viewportW) / 2);
+            inst.panX   = Math.max(-maxPanX, Math.min(maxPanX, inst.panX || 0));
         }
 
         if (scaledH <= viewportH) {
             inst.panY = 0;
         } else {
-            var maxPanY = Math.max(0, Math.round((scaledH - viewportH) / 2));
-            inst.panY = Math.max(-maxPanY, Math.min(maxPanY, inst.panY || 0));
+            var maxPanY = Math.round((scaledH - viewportH) / 2);
+            inst.panY   = Math.max(-maxPanY, Math.min(maxPanY, inst.panY || 0));
         }
     }
 
-    function aplicarTransformacion(id, bounds) {
+    function aplicarTransformacion(id) {
         var inst = instancias[id];
         var book = getLibroEl(id);
         if (!inst || !book) return;
 
-        if (!bounds && inst.flipBook && typeof inst.flipBook.getBoundsRect === 'function') {
-            bounds = inst.flipBook.getBoundsRect();
-        }
-
-        clampPan(id, bounds);
+        clampPan(id);
         sincronizarModoPan(id);
 
-        var offsetX = getOffsetPaginaUnica(inst, bounds);
-        var tx = Math.round(offsetX + (inst.panX || 0));
-        var ty = Math.round(inst.panY || 0);
+        var offsetX = getOffsetPaginaUnica(inst);
+        var tx      = Math.round(offsetX + (inst.panX || 0));
+        var ty      = Math.round(inst.panY || 0);
 
-        book.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + inst.zoom + ')';
+        book.style.transform       = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + inst.zoom + ')';
         book.style.transformOrigin = 'center top';
-        book.style.transition = inst.isPanning ? 'none' : 'transform 0.2s ease';
+        book.style.transition      = inst.isPanning ? 'none' : 'transform 0.2s ease';
     }
 
     function actualizarVista(id) {
@@ -660,44 +599,26 @@
 
         sincronizarLayoutViewport(id);
 
-        var visorEl = document.getElementById('fbm-visor-' + id);
-        var bounds = null;
-        // Con size:'fixed', usar inst.alto directamente — getBoundsRect puede devolver 0
-        // durante los primeros frames antes de que StPageFlip pinte el libro.
+        var visorEl  = getVisorEl(id);
         var altoBase = inst.alto;
         try {
             if (inst.flipBook && typeof inst.flipBook.getBoundsRect === 'function') {
                 var b = inst.flipBook.getBoundsRect();
-                if (b) {
-                    bounds = b;
-                    if (b.height > 10) altoBase = b.height;
-                }
+                if (b && b.height > 10) altoBase = b.height;
             }
-        } catch(e) {}
+        } catch (e) {}
 
         if (visorEl && !esFullscreenId(id)) {
             visorEl.style.height = Math.round(altoBase) + 'px';
         }
 
-        if (!bounds) {
-            bounds = {
-                width: inst.ancho,
-                height: altoBase,
-                pageWidth: Math.floor(inst.ancho / 2),
-            };
-        } else if (!bounds.pageWidth) {
-            bounds.pageWidth = Math.floor((bounds.width || inst.ancho) / 2);
-        }
-
-        aplicarTransformacion(id, bounds);
+        aplicarTransformacion(id);
     }
 
     function refrescarFlipbook(id) {
         var inst = instancias[id];
         if (!inst || !inst.flipBook || typeof inst.flipBook.update !== 'function') return;
-
         sincronizarLayoutViewport(id);
-
         requestAnimationFrame(function () {
             inst.flipBook.update();
             requestAnimationFrame(function () {
@@ -711,22 +632,18 @@
         var inst = instancias[id];
         if (!inst) return;
         var idx = niveles.indexOf(inst.zoom);
-        if (idx === -1) idx = 0;  // default: 100%
-        idx = Math.max(0, Math.min(niveles.length - 1, idx + dir));
+        if (idx === -1) idx = 0;
+        idx       = Math.max(0, Math.min(niveles.length - 1, idx + dir));
         inst.zoom = niveles[idx];
 
-        if (inst.zoom <= 1.0001) {
-            resetPan(id);
-        } else {
-            clampPan(id, inst.flipBook && typeof inst.flipBook.getBoundsRect === 'function' ? inst.flipBook.getBoundsRect() : null);
-        }
+        if (inst.zoom <= 1.0001) resetPan(id);
+        else clampPan(id);
+
         actualizarVista(id);
 
         var zEl = document.getElementById('fbm-zoom-' + id);
         if (zEl) zEl.textContent = Math.round(inst.zoom * 100) + '%';
 
-        // Re-render HD: si el zoom es > 1, espera 400ms (debounce) y re-renderiza
-        // las páginas visibles desde el PDF original a la escala exacta del zoom.
         programarReRenderHD(id);
     }
 
@@ -750,33 +667,37 @@
         var host = getWrapEl(id) || document.documentElement;
         try {
             if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement) {
-                var req = host.requestFullscreen
-                       || host.webkitRequestFullscreen
-                       || host.mozRequestFullScreen;
+                var req = host.requestFullscreen || host.webkitRequestFullscreen || host.mozRequestFullScreen;
                 if (req) req.call(host);
             } else {
                 var ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen;
                 if (ex) ex.call(document);
             }
-        } catch(e) { window.open(window.location.href, '_blank'); }
+        } catch (e) { window.open(window.location.href, '_blank'); }
     }
 
-    ['fullscreenchange','webkitfullscreenchange'].forEach(function(ev) {
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
         document.addEventListener(ev, function () {
             document.querySelectorAll('.fbm-btn-fs').forEach(function (btn) {
-                var idBtn = btn.dataset.id;
+                var idBtn  = btn.dataset.id;
                 var activo = esFullscreenId(idBtn);
                 btn.classList.toggle('fs-activo', activo);
                 btn.title = activo ? 'Salir de pantalla completa' : 'Pantalla completa (F)';
             });
 
-            document.querySelectorAll('.fbm-visor').forEach(function(v) {
+            document.querySelectorAll('.fbm-visor').forEach(function (v) {
                 var id2  = v.dataset.id;
                 var inst = instancias[id2];
                 if (!inst) return;
 
+                // Al salir de fullscreen: recentrar el pan automáticamente
+                if (!esFullscreenId(id2)) {
+                    inst.panX = 0;
+                    inst.panY = 0;
+                }
+
                 sincronizarLayoutViewport(id2);
-                [0, 80, 220].forEach(function(delay) {
+                [0, 80, 220].forEach(function (delay) {
                     window.setTimeout(function () { refrescarFlipbook(id2); }, delay);
                 });
             });
@@ -791,13 +712,13 @@
         var titulo   = btn.dataset.titulo || document.title;
         var enIframe = (window !== window.top);
         if (!enIframe && navigator.share) {
-            navigator.share({ title: titulo, url: url }).catch(function(){});
+            navigator.share({ title: titulo, url: url }).catch(function () {});
         } else {
-            var copiar = function(texto) {
+            var copiar = function (texto) {
                 if (navigator.clipboard) {
                     navigator.clipboard.writeText(texto)
-                        .then(function() { toast('🔗 Enlace copiado al portapapeles'); })
-                        .catch(function() { prompt('Copia este enlace:', texto); });
+                        .then(function () { toast('🔗 Enlace copiado al portapapeles'); })
+                        .catch(function () { prompt('Copia este enlace:', texto); });
                 } else { prompt('Copia este enlace:', texto); }
             };
             copiar(url);
@@ -811,16 +732,17 @@
     }
 
     // ══════════════════════════════════════════════════════
-    // SWIPE / TECLADO
+    // SWIPE / TECLADO / ARRASTRE
     // ══════════════════════════════════════════════════════
     function conectarSwipe(id, elVisor, fb) {
         var sx = 0, sy = 0;
-        elVisor.addEventListener('touchstart', function(e) {
+        elVisor.addEventListener('touchstart', function (e) {
             var inst = instancias[id];
             if (inst && inst.zoom > 1.0001) return;
-            sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+            sx = e.touches[0].clientX;
+            sy = e.touches[0].clientY;
         }, { passive: true });
-        elVisor.addEventListener('touchend', function(e) {
+        elVisor.addEventListener('touchend', function (e) {
             var inst = instancias[id];
             if (inst && inst.zoom > 1.0001) return;
             var dx = e.changedTouches[0].clientX - sx;
@@ -849,9 +771,9 @@
         panLayer.addEventListener('pointerdown', function (e) {
             var inst = instancias[id];
             if (!inst || inst.zoom <= 1.0001) return;
-            inst.isPanning = true;
-            inst.panStartX = e.clientX;
-            inst.panStartY = e.clientY;
+            inst.isPanning  = true;
+            inst.panStartX  = e.clientX;
+            inst.panStartY  = e.clientY;
             inst.panOriginX = inst.panX || 0;
             inst.panOriginY = inst.panY || 0;
             panLayer.classList.add('is-dragging');
@@ -902,109 +824,29 @@
     }
 
     // ══════════════════════════════════════════════════════
-    // TOAST / UTILS
+    // UTILIDADES
     // ══════════════════════════════════════════════════════
     function toast(msg) {
         var t = document.createElement('div');
-        t.textContent = msg;
+        t.textContent  = msg;
         t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);'
             + 'background:#1e293b;color:#f1f5f9;padding:10px 20px;border-radius:8px;'
             + 'font-size:13px;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,.4);'
             + 'pointer-events:none;opacity:1;transition:opacity .4s;';
         document.body.appendChild(t);
-        setTimeout(function() { t.style.opacity='0'; }, 2000);
-        setTimeout(function() { if(t.parentNode) t.remove(); }, 2500);
+        setTimeout(function () { t.style.opacity = '0'; }, 2000);
+        setTimeout(function () { if (t.parentNode) t.remove(); }, 2500);
     }
 
-    function setInfo(id, txt) { var e=document.getElementById('fbm-info-'+id);    if(e) e.textContent=txt; }
-    function setTxt(id, txt)  { var e=document.querySelector('#fbm-cargando-'+id+' .fbm-cargando-texto'); if(e) e.textContent=txt; }
-    function setProg(id, pct) { var e=document.getElementById('fbm-progreso-'+id); if(e) e.style.width=pct+'%'; }
+    function setInfo(id, txt) { var e = document.getElementById('fbm-info-'     + id); if (e) e.textContent = txt; }
+    function setTxt(id,  txt) { var e = document.querySelector('#fbm-cargando-' + id + ' .fbm-cargando-texto'); if (e) e.textContent = txt; }
+    function setProg(id, pct) { var e = document.getElementById('fbm-progreso-' + id); if (e) e.style.width = pct + '%'; }
+
     function mostrarError(id, msg) {
-        var e=document.getElementById('fbm-cargando-'+id);
-        if(e) e.innerHTML='<div class="fbm-error" style="max-width:360px;margin:auto;">⚠️ '+msg
-            +'<br><small style="opacity:.7;font-size:11px;margin-top:6px;display:block;">Si el problema persiste, ve a <em>LeafBook PDF → Ajustes</em> para verificar la configuración.</small></div>';
+        var e = document.getElementById('fbm-cargando-' + id);
+        if (e) e.innerHTML = '<div class="fbm-error" style="max-width:360px;margin:auto;">⚠️ ' + msg
+            + '<br><small style="opacity:.7;font-size:11px;margin-top:6px;display:block;">Si el problema persiste, ve a <em>LeafBook PDF → Ajustes</em> para verificar la configuración.</small></div>';
         setInfo(id, 'Error');
     }
 
 })();
-
-// ══════════════════════════════════════════════════════════
-// BÚSQUEDA EN PDF
-// ══════════════════════════════════════════════════════════
-var fbmTextoPorPagina = {};
-
-function fbmIndexarTexto(id, pdfDoc) {
-    fbmTextoPorPagina[id] = [];
-    var total = pdfDoc.numPages;
-    for (var i = 1; i <= total; i++) {
-        (function(num) {
-            pdfDoc.getPage(num)
-            .then(function(pag){ return pag.getTextContent(); })
-            .then(function(tc){
-                fbmTextoPorPagina[id][num-1] =
-                    tc.items.map(function(it){ return it.str; }).join(' ').toLowerCase();
-            })
-            .catch(function(){ fbmTextoPorPagina[id][num-1] = ''; });
-        })(i);
-    }
-}
-
-window.fbmLimpiarBusqueda = function(id) {
-    var inp = document.getElementById('fbm-search-input-'+id);
-    var res = document.getElementById('fbm-search-res-'+id);
-    if (inp) inp.value = '';
-    if (res) res.style.display = 'none';
-    var inf = document.getElementById('fbm-search-info-'+id);
-    if (inf) inf.textContent = '';
-};
-
-function fbmBuscar(id, termino) {
-    var resEl   = document.getElementById('fbm-search-res-'+id);
-    var listaEl = document.getElementById('fbm-search-res-lista-'+id);
-    var infoEl  = document.getElementById('fbm-search-info-'+id);
-    if (!resEl || !listaEl) return;
-
-    termino = (termino||'').trim().toLowerCase();
-    if (!termino) { resEl.style.display='none'; if(infoEl) infoEl.textContent=''; return; }
-
-    var textos = fbmTextoPorPagina[id];
-    if (!textos || !textos.length) { if(infoEl) infoEl.textContent='Indexando…'; return; }
-
-    var hits = [];
-    textos.forEach(function(txt,idx){ if(txt && txt.indexOf(termino)!==-1) hits.push(idx+1); });
-
-    listaEl.innerHTML = '';
-    if (!hits.length) {
-        listaEl.innerHTML = '<span class="fbm-search-nada">Sin resultados para "<strong>'+termino+'</strong>"</span>';
-        if (infoEl) infoEl.textContent = '0';
-    } else {
-        if (infoEl) infoEl.textContent = hits.length + ' pág.';
-        hits.forEach(function(num) {
-            var btn = document.createElement('button');
-            btn.className   = 'fbm-search-res-btn';
-            btn.textContent = 'Pág. ' + num;
-            btn.onclick = function() {
-                var inst = window._lbInstancias && window._lbInstancias[id];
-                if (inst) inst.flipBook.flip(num-1);
-                resEl.style.display = 'none';
-            };
-            listaEl.appendChild(btn);
-        });
-    }
-    resEl.style.display = 'block';
-}
-
-document.addEventListener('DOMContentLoaded', function(){
-    document.querySelectorAll('.fbm-search-input').forEach(function(inp){
-        var timer;
-        inp.addEventListener('input', function(){
-            clearTimeout(timer);
-            var id = inp.dataset.id;
-            timer = setTimeout(function(){ fbmBuscar(id, inp.value); }, 350);
-        });
-        inp.addEventListener('keydown', function(e){
-            if (e.key === 'Escape') fbmLimpiarBusqueda(inp.dataset.id);
-        });
-    });
-});
-
