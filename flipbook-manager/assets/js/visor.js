@@ -74,21 +74,23 @@
                 });
         }
 
+        var _pdfDoc = null;  // guardado para re-render HD en zoom
+
         cargarConRetry(datos.pdfUrl)
         .then(function (doc) {
+            _pdfDoc = doc;
             var total = doc.numPages;
             setTxt(id, 'Procesando ' + total + ' páginas…');
             if (datos.buscar === '1') fbmIndexarTexto(id, doc);
             return renderTodas(doc, total, ancho, alto, id, { calidad: calidadRender, escala: escalaRender, zoomMax: 3 });
         })
         .then(function (dataUrls) {
-            // Calienta la decodificación del browser, pero el flipbook recibe
-            // string[] porque StPageFlip espera rutas/data-URLs.
             setTxt(id, 'Preparando páginas…');
             return precargarImagenes(dataUrls, id);
         })
         .then(function (imageSources) {
-            crearFlipbook(id, imageSources, ancho, alto, elVisor, datos);
+            setTxt(id, 'Montando visor…');
+            crearFlipbook(id, imageSources, ancho, alto, elVisor, datos, _pdfDoc, escalaRender);
         })
         .catch(function (e) {
             console.error('[LeafBook PDF]', e);
@@ -186,11 +188,8 @@
     // ══════════════════════════════════════════════════════
     // CREAR FLIPBOOK
     // ══════════════════════════════════════════════════════
-    function crearFlipbook(id, imageSources, ancho, alto, elVisor, datos) {
+    function crearFlipbook(id, imageSources, ancho, alto, elVisor, datos, pdfDoc, escalaBase) {
         setProg(id, 99);
-
-        var spin = document.getElementById('fbm-cargando-' + id);
-        if (spin) spin.style.display = 'none';
 
         var anchoPag = Math.floor(ancho / 2);
 
@@ -201,7 +200,8 @@
         var book = document.createElement('div');
         book.id = 'fbm-book-' + id;
         book.className = 'fbm-libro';
-        book.style.cssText = 'position:relative;width:100%;margin:0 auto;';
+        // Con size:'fixed', fijar dimensiones exactas en el contenedor del libro
+        book.style.cssText = 'position:relative;width:' + ancho + 'px;height:' + alto + 'px;margin:0 auto;flex-shrink:0;';
         elVisor.appendChild(book);
 
         var panLayer = document.createElement('div');
@@ -214,34 +214,28 @@
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
 
-                var minPageWidth  = Math.max(160, Math.round(anchoPag * 0.42));
-                var minPageHeight = Math.max(220, Math.round(alto * (minPageWidth / anchoPag)));
-                var maxPageWidth  = Math.max(anchoPag, Math.round(((window.screen && window.screen.width) || ancho) * 0.46));
-                var maxPageHeight = Math.max(alto, Math.round(((window.screen && window.screen.height) || alto) * 0.90));
-
+                // FIX: size:'fixed' con autoSize:false garantiza que las páginas
+                // se rendericen exactamente al aspect ratio del PDF sin deformación.
+                // El contenedor .fbm-libro se escala vía transform (zoom/pan), no stretch.
                 var fb = new St.PageFlip(book, {
                     width:               anchoPag,
                     height:              alto,
-                    size:                'stretch',
-                    minWidth:            minPageWidth,
-                    maxWidth:            maxPageWidth,
-                    minHeight:           minPageHeight,
-                    maxHeight:           maxPageHeight,
+                    size:                'fixed',
                     drawShadow:          true,
                     flippingTime:        600,
                     usePortrait:         true,
-                    autoSize:            true,
+                    autoSize:            false,
                     maxShadowOpacity:    0.4,
                     showCover:           true,
                     mobileScrollSupport: false,
                     startZIndex:         0,
                 });
 
-                fb.loadFromImages(imageSources);
-
                 instancias[id] = {
                     flipBook:     fb,
                     imagenes:     imageSources,
+                    imagenesBase: imageSources.slice(),  // copia de las imágenes base
+                    pdfDoc:       pdfDoc,                // referencia al PDF para re-render HD
                     libroEl:      book,
                     panLayer:     panLayer,
                     zoom:         1,
@@ -251,6 +245,9 @@
                     totalPaginas: imageSources.length,
                     ancho:        ancho,
                     alto:         alto,
+                    escalaBase:   escalaBase || 1.5,
+                    hdTimer:      null,
+                    hdZoom:       0,
                 };
 
                 fb.on('flip', function (e) {
@@ -270,6 +267,8 @@
                 });
 
                 fb.on('init', function () {
+                    var spin = document.getElementById('fbm-cargando-' + id);
+                    if (spin) spin.style.display = 'none';
                     setInfo(id, 'Pág. 1 / ' + imageSources.length);
                     setProg(id, 100);
                     setTimeout(function () {
@@ -295,6 +294,7 @@
                 conectarTeclado(id, elVisor);
                 conectarSwipe(id, elVisor, fb);
                 conectarArrastre(id, panLayer);
+                fb.loadFromImages(imageSources);
 
             }); // rAF 2
         }); // rAF 1
@@ -371,10 +371,141 @@
         });
     }
 
+
+    // ══════════════════════════════════════════════════════
+    // RE-RENDER HD AL ZOOM
+    // Cuando el usuario hace zoom, re-renderiza las páginas visibles
+    // desde el PDF original a la escala exacta → sin borrosidad.
+    // Cuando vuelve a zoom 1x restaura las imágenes base (más ligeras).
+    // ══════════════════════════════════════════════════════
+    function programarReRenderHD(id) {
+        var inst = instancias[id];
+        if (!inst) return;
+
+        // Cancelar render pendiente
+        if (inst.hdTimer) { clearTimeout(inst.hdTimer); inst.hdTimer = null; }
+
+        // Si volvemos a zoom 1x, restaurar imágenes base inmediatamente
+        if (inst.zoom <= 1.0001) {
+            if (inst.hdZoom > 0 && inst.imagenesBase) {
+                inst.hdZoom = 0;
+                inst.flipBook.loadFromImages(inst.imagenesBase);
+            }
+            return;
+        }
+
+        // Debounce 350ms — esperar a que el usuario termine de ajustar el zoom
+        inst.hdTimer = setTimeout(function () {
+            inst.hdTimer = null;
+            reRenderizarHD(id);
+        }, 350);
+    }
+
+    function reRenderizarHD(id) {
+        var inst = instancias[id];
+        if (!inst || !inst.pdfDoc || inst.zoom <= 1.0001) return;
+        if (inst.hdZoom === inst.zoom) return; // ya está al nivel correcto
+
+        // FIX: detectar modo página única vs doble según StPageFlip
+        var modoSimple = inst.flipBook && typeof inst.flipBook.getOrientation === 'function'
+            ? inst.flipBook.getOrientation() === 'portrait'
+            : inst.ancho < 600;
+        var anchoPag = modoSimple ? inst.ancho : Math.floor(inst.ancho / 2);
+        var zoomActual = inst.zoom;
+
+        // FIX: escalaHD debe superar la escala base para que el re-render sea realmente más nítido.
+        // Fórmula: escalaBase × zoom × DPR — siempre mayor que la imagen base
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var escalaBase = inst.escalaBase || 1.5;
+        var escalaHD = escalaBase * zoomActual * dpr;
+        var renderCfg = { calidad: 1.0, escalaHD: escalaHD };
+
+        // Averiguar qué páginas están visibles ahora
+        var paginasVisibles = getPaginasVisibles(inst);
+
+        // Renderizar solo las páginas visibles primero, luego el resto
+        var total = inst.totalPaginas;
+        var ordenRender = [];
+        for (var i = 0; i < total; i++) {
+            if (paginasVisibles.indexOf(i) !== -1) ordenRender.unshift(i); // visibles al frente
+            else ordenRender.push(i);
+        }
+
+        // Clonar array base para ir reemplazando
+        var nuevasImagenes = inst.imagenesBase.slice();
+        var zoomCapturado = zoomActual;
+
+        // Renderizar secuencialmente
+        var chain = Promise.resolve();
+        ordenRender.forEach(function (n) {
+            chain = chain.then(function () {
+                // Si el zoom cambió mientras renderizábamos, abortar
+                if (inst.zoom !== zoomCapturado || inst.zoom <= 1.0001) {
+                    return Promise.reject('zoom-changed');
+                }
+                return renderPaginaHD(inst.pdfDoc, n + 1, anchoPag, inst.alto, escalaHD)
+                .then(function (dataUrl) {
+                    if (inst.zoom !== zoomCapturado) return;
+                    nuevasImagenes[n] = dataUrl;
+                    // Si es página visible, recargar inmediatamente
+                    if (paginasVisibles.indexOf(n) !== -1) {
+                        inst.flipBook.loadFromImages(nuevasImagenes.slice());
+                    }
+                });
+            });
+        });
+
+        chain.then(function () {
+            if (inst.zoom === zoomCapturado && inst.zoom > 1.0001) {
+                inst.hdZoom = zoomCapturado;
+                inst.flipBook.loadFromImages(nuevasImagenes.slice());
+                inst.imagenes = nuevasImagenes;
+            }
+        }).catch(function (reason) {
+            if (reason !== 'zoom-changed') console.warn('[LeafBook HD]', reason);
+        });
+    }
+
+    function renderPaginaHD(doc, n, anchoPag, altoPag, escalaHD) {
+        return doc.getPage(n).then(function (pag) {
+            var vp0 = pag.getViewport({ scale: 1 });
+            var fitScale = Math.min(anchoPag / vp0.width, altoPag / vp0.height);
+            // Limitar a ~20MP para no agotar memoria
+            // FIX: aumentamos límite a 40MP para soportar zoom HD nítido (antes 20MP era insuficiente)
+            var maxScale = Math.sqrt(40000000 / (vp0.width * vp0.height));
+            var escalaFinal = Math.min(fitScale * escalaHD, maxScale);
+            var vp = pag.getViewport({ scale: escalaFinal });
+
+            var canvas = document.createElement('canvas');
+            canvas.width  = Math.round(vp.width);
+            canvas.height = Math.round(vp.height);
+            var ctx = canvas.getContext('2d', { alpha: false });
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            return pag.render({ canvasContext: ctx, viewport: vp }).promise
+                .then(function () { return canvas.toDataURL('image/png'); });
+        });
+    }
+
+    function getPaginasVisibles(inst) {
+        if (!inst || !inst.flipBook) return [0];
+        var idx = 0;
+        if (typeof inst.flipBook.getCurrentPageIndex === 'function') {
+            idx = inst.flipBook.getCurrentPageIndex() || 0;
+        }
+        // En modo libro: páginas idx y idx+1 son visibles
+        var visibles = [idx];
+        if (idx + 1 < inst.totalPaginas) visibles.push(idx + 1);
+        return visibles;
+    }
+
     // ══════════════════════════════════════════════════════
     // ZOOM
     // ══════════════════════════════════════════════════════
-    var niveles = [0.4, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3];
+    var niveles = [1, 1.25, 1.5, 2, 2.5, 3];  // mínimo 100% — el zoom-out no tiene sentido en un flipbook
 
     function getLibroEl(id) {
         return document.getElementById('fbm-book-' + id);
@@ -461,9 +592,10 @@
         var idx = typeof inst.flipBook.getCurrentPageIndex === 'function'
             ? inst.flipBook.getCurrentPageIndex()
             : 0;
+        var pageWidth = bounds.pageWidth || Math.floor((bounds.width || inst.ancho || 0) / 2);
 
-        if (idx === 0) return -Math.round((bounds.pageWidth || 0) / 2);
-        if (idx >= inst.totalPaginas - 1) return Math.round((bounds.pageWidth || 0) / 2);
+        if (idx === 0) return -Math.round(pageWidth / 2);
+        if (idx >= inst.totalPaginas - 1) return Math.round(pageWidth / 2);
         return 0;
     }
 
@@ -529,13 +661,32 @@
         sincronizarLayoutViewport(id);
 
         var visorEl = document.getElementById('fbm-visor-' + id);
-        var bounds = inst.flipBook && typeof inst.flipBook.getBoundsRect === 'function'
-            ? inst.flipBook.getBoundsRect()
-            : null;
-        var altoBase = bounds && bounds.height ? bounds.height : inst.alto;
+        var bounds = null;
+        // Con size:'fixed', usar inst.alto directamente — getBoundsRect puede devolver 0
+        // durante los primeros frames antes de que StPageFlip pinte el libro.
+        var altoBase = inst.alto;
+        try {
+            if (inst.flipBook && typeof inst.flipBook.getBoundsRect === 'function') {
+                var b = inst.flipBook.getBoundsRect();
+                if (b) {
+                    bounds = b;
+                    if (b.height > 10) altoBase = b.height;
+                }
+            }
+        } catch(e) {}
 
         if (visorEl && !esFullscreenId(id)) {
             visorEl.style.height = Math.round(altoBase) + 'px';
+        }
+
+        if (!bounds) {
+            bounds = {
+                width: inst.ancho,
+                height: altoBase,
+                pageWidth: Math.floor(inst.ancho / 2),
+            };
+        } else if (!bounds.pageWidth) {
+            bounds.pageWidth = Math.floor((bounds.width || inst.ancho) / 2);
         }
 
         aplicarTransformacion(id, bounds);
@@ -560,7 +711,7 @@
         var inst = instancias[id];
         if (!inst) return;
         var idx = niveles.indexOf(inst.zoom);
-        if (idx === -1) idx = 3;
+        if (idx === -1) idx = 0;  // default: 100%
         idx = Math.max(0, Math.min(niveles.length - 1, idx + dir));
         inst.zoom = niveles[idx];
 
@@ -573,6 +724,10 @@
 
         var zEl = document.getElementById('fbm-zoom-' + id);
         if (zEl) zEl.textContent = Math.round(inst.zoom * 100) + '%';
+
+        // Re-render HD: si el zoom es > 1, espera 400ms (debounce) y re-renderiza
+        // las páginas visibles desde el PDF original a la escala exacta del zoom.
+        programarReRenderHD(id);
     }
 
     // ══════════════════════════════════════════════════════
@@ -852,3 +1007,4 @@ document.addEventListener('DOMContentLoaded', function(){
         });
     });
 });
+
