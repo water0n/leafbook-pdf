@@ -557,3 +557,43 @@
     border-top: none;
 }
 
+
+/* ════════════════════════════════════════════════════════
+   FULLSCREEN EN IFRAME
+   Cuando el host es document.documentElement (caso iframe),
+   el wrap con fbm-wrap--fullscreen necesita ocupar todo el viewport.
+   ════════════════════════════════════════════════════════ */
+.fbm-wrap--fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    z-index: 2147483647;
+    display: flex;
+    flex-direction: column;
+    background: #0f172a;
+}
+
+.fbm-wrap--fullscreen .fbm-area-principal {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.fbm-wrap--fullscreen .fbm-visor-wrap,
+.fbm-wrap--fullscreen .fbm-visor {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0;
+}
+
+.fbm-wrap--fullscreen .fbm-libro {
+    max-width: none !important;
+}
+
+.fbm-wrap--fullscreen .fbm-controles {
+    border-radius: 0;
+}

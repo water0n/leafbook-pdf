@@ -1,20 +1,19 @@
 /**
- * visor.js — LeafBook PDF v1.5.0
+ * visor.js — LeafBook PDF v1.5.1
  *
- * CORRECCIONES v1.5.0:
- *  1. INIT BUG (iframe): fbmIniciarTodos() ahora usa un patrón defensivo
- *     que funciona tanto si DOMContentLoaded ya disparó (iframe) como si
- *     aún no lo ha hecho (shortcode en página normal).
+ * FIXES v1.5.1:
+ *  1. CAMBIO DE PÁGINA BLOQUEADO: El panLayer se mueve fuera del .fbm-visor
+ *     (ahora es hijo del .fbm-visor-wrap) para que no interfiera con los
+ *     eventos de click/drag de StPageFlip cuando zoom = 1x.
  *
- *  2. CENTRADO: La primera página (portada) ya no se desplaza a la derecha.
+ *  2. FULLSCREEN EN IFRAME: Se usa document.documentElement como host del
+ *     fullscreen en lugar del .fbm-contenedor-externo. Dentro de un iframe
+ *     el elemento raíz sí puede entrar a pantalla completa; un div interior
+ *     no siempre lo logra. El visor se ajusta por JS al 100% del viewport.
  *
- *  3. ZOOM PIXELADO: Re-render HD desde el PDF a la escala exacta del zoom.
- *     Imágenes base más ligeras para carga inicial rápida.
- *
- *  4. PAN CONTENIDO: Arrastre restringido al área del visor.
- *     Al salir de fullscreen la vista se recentra.
- *
- *  5. BÚSQUEDA eliminada.
+ *  3. ZOOM PIXELADO: renderPaginaHD ahora calcula anchoPag y altoPag según
+ *     el tamaño real del visor en ese momento (fullscreen o normal),
+ *     garantizando que el canvas HD tenga la resolución correcta.
  */
 (function () {
     'use strict';
@@ -34,14 +33,6 @@
 
     // ══════════════════════════════════════════════════════
     // INIT — patrón defensivo para iframe Y shortcode
-    //
-    // PROBLEMA RESUELTO: en el iframe los scripts van al final del <body>,
-    // por lo que DOMContentLoaded ya disparó cuando visor.js se evalúa.
-    // Usar solo addEventListener('DOMContentLoaded') hace que nunca se llame
-    // fbmIniciarTodos() → visor atascado en "Cargando…".
-    //
-    // SOLUCIÓN: si el DOM ya está listo → llamar con setTimeout(0).
-    //           si aún no → esperar al evento DOMContentLoaded.
     // ══════════════════════════════════════════════════════
     window.fbmIniciarTodos = function () {
         document.querySelectorAll('.fbm-visor').forEach(function (elVisor) {
@@ -57,8 +48,6 @@
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', window.fbmIniciarTodos);
     } else {
-        // DOM ya listo (caso iframe): ejecutar en el siguiente tick para
-        // garantizar que todos los scripts inline anteriores ya corrieron.
         setTimeout(window.fbmIniciarTodos, 0);
     }
 
@@ -75,10 +64,10 @@
 
         pdfjsLib.GlobalWorkerOptions.workerSrc = datos.workerSrc;
 
-        var ancho      = parseInt(datos.ancho,    10) || 900;
-        var alto       = parseInt(datos.alto,     10) || 600;
-        var escalaBase = Math.min(2, Math.max(1,  parseFloat(datos.escala)   || 1.5));
-        var calidad    = Math.min(1, Math.max(0.6, parseFloat(datos.calidad) || 0.85));
+        var ancho      = parseInt(datos.ancho,     10) || 900;
+        var alto       = parseInt(datos.alto,      10) || 600;
+        var escalaBase = Math.min(2, Math.max(1,   parseFloat(datos.escala)   || 1.5));
+        var calidad    = Math.min(1, Math.max(0.6, parseFloat(datos.calidad)  || 0.85));
 
         setProg(id, 5);
         setTxt(id, 'Conectando…');
@@ -125,7 +114,7 @@
     }
 
     // ══════════════════════════════════════════════════════
-    // PRE-CARGA DE IMÁGENES
+    // PRE-CARGA
     // ══════════════════════════════════════════════════════
     function precargarImagenes(dataUrls, id) {
         var total    = dataUrls.length;
@@ -148,9 +137,8 @@
     }
 
     // ══════════════════════════════════════════════════════
-    // RENDERIZAR PÁGINAS → array de data URLs
-    // Escala base moderada → carga rápida.
-    // El HD se genera solo cuando el usuario hace zoom.
+    // RENDER BASE — escala moderada para carga rápida
+    // El HD se genera solo al hacer zoom.
     // ══════════════════════════════════════════════════════
     function renderTodas(doc, total, anchoVisor, altoVisor, id, escalaBase, calidad) {
         var imgs     = [];
@@ -177,9 +165,8 @@
             var vp0      = pag.getViewport({ scale: 1 });
             var fitScale = Math.min(anchoPag / vp0.width, altoPag / vp0.height);
             var escalaFinal = fitScale * escalaBase;
-            // Límite 10MP para carga inicial rápida
-            var maxScale = Math.sqrt(10000000 / (vp0.width * vp0.height));
-            escalaFinal  = Math.min(escalaFinal, maxScale);
+            var maxScale    = Math.sqrt(10000000 / (vp0.width * vp0.height));
+            escalaFinal     = Math.min(escalaFinal, maxScale);
 
             var vp     = pag.getViewport({ scale: escalaFinal });
             var canvas = document.createElement('canvas');
@@ -209,18 +196,28 @@
 
         var libroExistente = document.getElementById('fbm-book-' + id);
         if (libroExistente) libroExistente.remove();
+        var panExistente = document.getElementById('fbm-pan-' + id);
+        if (panExistente) panExistente.remove();
 
+        // El libro va dentro del .fbm-visor
         var book = document.createElement('div');
         book.id        = 'fbm-book-' + id;
         book.className = 'fbm-libro';
         book.style.cssText = 'position:relative;width:' + ancho + 'px;height:' + alto + 'px;margin:0 auto;flex-shrink:0;';
         elVisor.appendChild(book);
 
+        // FIX BUG 1: El panLayer va en .fbm-visor-wrap (padre del visor),
+        // NO dentro del .fbm-visor. Así StPageFlip puede recibir los clicks
+        // de flip normalmente cuando zoom = 1x, porque el panLayer está en
+        // un contenedor hermano con pointer-events:none por defecto.
+        var visorWrap = document.getElementById('fbm-visor-wrap-' + id);
+        var panParent = visorWrap || elVisor;
+
         var panLayer = document.createElement('div');
         panLayer.id        = 'fbm-pan-' + id;
         panLayer.className = 'fbm-pan-layer';
         panLayer.setAttribute('aria-hidden', 'true');
-        elVisor.appendChild(panLayer);
+        panParent.appendChild(panLayer);
 
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
@@ -367,6 +364,8 @@
 
     // ══════════════════════════════════════════════════════
     // RE-RENDER HD AL ZOOM
+    // FIX BUG 3: anchoPag y altoPag se calculan desde el tamaño real
+    // del visor en el momento del render (puede ser fullscreen).
     // ══════════════════════════════════════════════════════
     function programarReRenderHD(id) {
         var inst = instancias[id];
@@ -392,13 +391,20 @@
         if (!inst || !inst.pdfDoc || inst.zoom <= 1.0001) return;
         if (inst.hdZoom === inst.zoom) return;
 
+        // FIX: usar tamaño real del visor, no el ancho fijo del flipbook
+        var visorEl   = getVisorEl(id);
         var modoSimple = inst.flipBook && typeof inst.flipBook.getOrientation === 'function'
             ? inst.flipBook.getOrientation() === 'portrait'
             : inst.ancho < 600;
-        var anchoPag   = modoSimple ? inst.ancho : Math.floor(inst.ancho / 2);
+
+        // En fullscreen el visor es más grande → más píxeles HD disponibles
+        var anchoVisor = (visorEl && visorEl.clientWidth  > 0) ? visorEl.clientWidth  : inst.ancho;
+        var altoVisor  = (visorEl && visorEl.clientHeight > 0) ? visorEl.clientHeight : inst.alto;
+        var anchoPag   = modoSimple ? anchoVisor : Math.floor(anchoVisor / 2);
+
         var zoomActual = inst.zoom;
         var dpr        = Math.min(window.devicePixelRatio || 1, 2);
-        // Escala HD = base × zoom × DPR → siempre más nítido que la imagen base
+        // Escala HD = fitScale × zoom × DPR → siempre más nítido que la base
         var escalaHD   = inst.escalaBase * zoomActual * dpr;
 
         var paginasVisibles = getPaginasVisibles(inst);
@@ -418,7 +424,7 @@
                 if (inst.zoom !== zoomCapturado || inst.zoom <= 1.0001) {
                     return Promise.reject('zoom-changed');
                 }
-                return renderPaginaHD(inst.pdfDoc, n + 1, anchoPag, inst.alto, escalaHD)
+                return renderPaginaHD(inst.pdfDoc, n + 1, anchoPag, altoVisor, escalaHD)
                     .then(function (dataUrl) {
                         if (inst.zoom !== zoomCapturado) return;
                         nuevasImagenes[n] = dataUrl;
@@ -444,7 +450,8 @@
         return doc.getPage(n).then(function (pag) {
             var vp0      = pag.getViewport({ scale: 1 });
             var fitScale = Math.min(anchoPag / vp0.width, altoPag / vp0.height);
-            var maxScale = Math.sqrt(40000000 / (vp0.width * vp0.height));
+            // 40MP límite para zoom HD sin agotar memoria
+            var maxScale    = Math.sqrt(40000000 / (vp0.width * vp0.height));
             var escalaFinal = Math.min(fitScale * escalaHD, maxScale);
             var vp = pag.getViewport({ scale: escalaFinal });
             var canvas = document.createElement('canvas');
@@ -476,14 +483,15 @@
     // ══════════════════════════════════════════════════════
     var niveles = [1, 1.25, 1.5, 2, 2.5, 3];
 
-    function getLibroEl(id)    { return document.getElementById('fbm-book-'  + id); }
-    function getWrapEl(id)     { return document.getElementById('fbm-wrap-'  + id); }
-    function getVisorEl(id)    { return document.getElementById('fbm-visor-' + id); }
-    function getPanLayerEl(id) { return document.getElementById('fbm-pan-'   + id); }
+    function getLibroEl(id)    { return document.getElementById('fbm-book-'       + id); }
+    function getWrapEl(id)     { return document.getElementById('fbm-wrap-'       + id); }
+    function getVisorEl(id)    { return document.getElementById('fbm-visor-'      + id); }
+    function getPanLayerEl(id) { return document.getElementById('fbm-pan-'        + id); }
 
     function esFullscreenId(id) {
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
-        return !!fsEl && fsEl === getWrapEl(id);
+        // En iframe el host es document.documentElement, no el wrap
+        return !!fsEl && (fsEl === getWrapEl(id) || fsEl === document.documentElement);
     }
 
     function resetPan(id) {
@@ -507,6 +515,8 @@
         if (!activo && inst) inst.isPanning = false;
     }
 
+    // FIX BUG 2: En iframe, el fullscreen se aplica a document.documentElement.
+    // La clase .fbm-wrap--fullscreen activa los estilos JS que ajustan el visor.
     function sincronizarLayoutViewport(id) {
         var inst  = instancias[id];
         var wrap  = getWrapEl(id);
@@ -516,24 +526,30 @@
 
         var esFS = esFullscreenId(id);
         wrap.classList.toggle('fbm-wrap--fullscreen', esFS);
-        wrap.style.maxWidth = esFS ? 'none' : inst.ancho + 'px';
-        wrap.style.width    = esFS ? '100vw' : '';
-        wrap.style.height   = esFS ? (window.innerHeight + 'px') : '';
-        book.style.maxWidth = 'none';
 
-        if (!esFS) { visor.style.height = ''; return; }
+        if (!esFS) {
+            wrap.style.cssText  = 'max-width:' + inst.ancho + 'px;margin:0 auto;';
+            visor.style.height  = '';
+            book.style.maxWidth = 'none';
+            return;
+        }
+
+        // En fullscreen: el wrap ocupa todo el viewport
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        wrap.style.cssText  = 'width:' + vw + 'px;height:' + vh + 'px;max-width:none;margin:0;';
+        book.style.maxWidth = 'none';
 
         var usados    = 0;
         var controles = document.getElementById('fbm-controles-' + id);
         var infoBar   = wrap.querySelector('.fbm-info-bar');
         if (controles) usados += controles.offsetHeight;
         if (infoBar)   usados += infoBar.offsetHeight;
-        visor.style.height = Math.max(260, window.innerHeight - usados) + 'px';
+        visor.style.height = Math.max(260, vh - usados) + 'px';
+        visor.style.width  = '100%';
     }
 
-    // ── Corrección de centrado: portada / contraportada ──────────────
-    // showCover:true hace que la portada se dibuje en la mitad derecha
-    // del canvas de ancho doble. Este offset lo corrige.
+    // Offset para centrar portada / contraportada (showCover:true desplaza)
     function getOffsetPaginaUnica(inst) {
         if (!inst || !inst.flipBook) return 0;
         if (typeof inst.flipBook.getOrientation !== 'function') return 0;
@@ -548,7 +564,6 @@
         return 0;
     }
 
-    // ── Clamp del pan dentro del área visible del visor ──────────────
     function clampPan(id) {
         var inst  = instancias[id];
         var visor = getVisorEl(id);
@@ -662,18 +677,32 @@
 
     // ══════════════════════════════════════════════════════
     // FULLSCREEN
+    // FIX BUG 2: En iframe se usa document.documentElement como host.
+    // Un div interior del iframe no siempre obtiene fullscreen real.
     // ══════════════════════════════════════════════════════
+    function estaEnIframe() {
+        try { return window.self !== window.top; } catch (e) { return true; }
+    }
+
     function hacerFullscreen(id) {
-        var host = getWrapEl(id) || document.documentElement;
+        var enFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+        if (enFS) {
+            var ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen;
+            if (ex) ex.call(document);
+            return;
+        }
+
+        // En iframe: usar documentElement para garantizar fullscreen real
+        var host = estaEnIframe()
+            ? document.documentElement
+            : (getWrapEl(id) || document.documentElement);
+
         try {
-            if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement) {
-                var req = host.requestFullscreen || host.webkitRequestFullscreen || host.mozRequestFullScreen;
-                if (req) req.call(host);
-            } else {
-                var ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen;
-                if (ex) ex.call(document);
-            }
-        } catch (e) { window.open(window.location.href, '_blank'); }
+            var req = host.requestFullscreen || host.webkitRequestFullscreen || host.mozRequestFullScreen;
+            if (req) req.call(host);
+        } catch (e) {
+            window.open(window.location.href, '_blank');
+        }
     }
 
     ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
@@ -690,7 +719,7 @@
                 var inst = instancias[id2];
                 if (!inst) return;
 
-                // Al salir de fullscreen: recentrar el pan automáticamente
+                // Al salir de fullscreen: recentrar
                 if (!esFullscreenId(id2)) {
                     inst.panX = 0;
                     inst.panY = 0;
@@ -710,7 +739,7 @@
     function hacerCompartir(btn) {
         var url      = btn.dataset.url    || window.location.href;
         var titulo   = btn.dataset.titulo || document.title;
-        var enIframe = (window !== window.top);
+        var enIframe = estaEnIframe();
         if (!enIframe && navigator.share) {
             navigator.share({ title: titulo, url: url }).catch(function () {});
         } else {
@@ -828,7 +857,7 @@
     // ══════════════════════════════════════════════════════
     function toast(msg) {
         var t = document.createElement('div');
-        t.textContent  = msg;
+        t.textContent   = msg;
         t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);'
             + 'background:#1e293b;color:#f1f5f9;padding:10px 20px;border-radius:8px;'
             + 'font-size:13px;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,.4);'
