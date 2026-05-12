@@ -5,7 +5,7 @@
  * Sistema de apariencia por PDF + presets guardados.
  *
  * Qué hace:
- *  1. Meta box en cada PDF con todos los toggles de botones e info
+ *  1. Meta box en cada PDF con tema, fondo e info opcional
  *  2. Sección de colores/fondo individual por PDF
  *  3. Presets guardados (guardar / aplicar / borrar) vía AJAX
  *  4. Fallback: si un PDF no tiene config propia, usa los globales de Ajustes
@@ -70,7 +70,7 @@ class Flipbook_Apariencia {
     public function meta_box() {
         add_meta_box(
             'lbpdf_apariencia',
-            '🎨 Apariencia y botones',
+            'Apariencia del lector',
             array( $this, 'render' ),
             'flipbook', 'normal', 'default'
         );
@@ -203,21 +203,16 @@ class Flipbook_Apariencia {
                 <input type="hidden" name="lbpdf_ap[_preset_id]" id="lap-preset-id-field" value="<?php echo esc_attr($cfg['_preset_id'] ?? ''); ?>">
             </div>
 
-            <!-- ══ BOTONES VISIBLES ═══════════════════════════════ -->
+            <!-- ══ CONTROLES DEL LECTOR ═══════════════════════════ -->
             <div class="lap-section">
-                <p class="lap-sec-title">Botones visibles en el visor</p>
-                <div class="lap-toggles">
-                    <?php foreach ( $toggles_botones as $key => list($ico, $label) ) : ?>
-                    <label class="lap-toggle">
-                        <input type="checkbox" name="lbpdf_ap[<?php echo $key; ?>]" value="1"
-                               id="lap-<?php echo $key; ?>"
-                               <?php checked( $cfg[$key], '1' ); ?>>
-                        <span class="lap-sw"></span>
-                        <span class="lap-toggle-ico"><?php echo $ico; ?></span>
-                        <span class="lap-toggle-lbl"><?php echo $label; ?></span>
-                    </label>
-                    <?php endforeach; ?>
-                </div>
+                <p class="lap-sec-title">Controles del lector</p>
+                <p style="margin:0;color:#50575e;font-size:13px;line-height:1.5;">
+                    LeafBook usa una barra fija y minima: anterior, contador, siguiente y pantalla completa.
+                    El zoom se controla con pellizco en movil o Ctrl/trackpad wheel en desktop.
+                </p>
+                <?php foreach ( $toggles_botones as $key => $button_info ) : ?>
+                    <input type="hidden" name="lbpdf_ap[<?php echo $key; ?>]" value="<?php echo esc_attr($cfg[$key] ?? '1'); ?>">
+                <?php endforeach; ?>
             </div>
 
             <!-- ══ INFORMACIÓN A MOSTRAR ════════════════════════ -->

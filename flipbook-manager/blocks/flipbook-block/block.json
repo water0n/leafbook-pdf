@@ -7,8 +7,8 @@
     "title":       "Flipbook",
     "category":    "media",
     "icon":        "book-alt",
-    "description": "Muestra una publicación tipo revista con efecto de volteo de página.",
-    "keywords":    ["flipbook", "revista", "pdf", "publicacion"],
+    "description": "Muestra una publicación PDF con lector limpio y pantalla completa.",
+    "keywords":    ["leafbook", "revista", "pdf", "publicacion"],
 
     "supports": {
         "html":  false,

@@ -129,7 +129,7 @@ class Flipbook_Settings {
                 </div>
                 <div class="lbpdf-card">
                     <div class="lbpdf-card-num">✅</div>
-                    <div class="lbpdf-card-label">PDF.js + StPageFlip</div>
+                    <div class="lbpdf-card-label">PDF.js local</div>
                     <a class="lbpdf-card-accion" href="<?php echo admin_url('admin.php?page=lbpdf-ajustes'); ?>">Personalizar →</a>
                 </div>
             </div>

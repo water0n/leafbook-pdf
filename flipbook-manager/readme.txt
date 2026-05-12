@@ -1,5 +1,5 @@
-=== Flipbook Manager ===
-Versión: 1.0.0
+=== LeafBook PDF ===
+Version: 1.6.0
 
 == ESTRUCTURA DEL PLUGIN ==
 
@@ -19,14 +19,16 @@ flipbook-manager/
 │   ├── css/
 │   │   └── visor.css                 ← Estilos del visor (frontend)
 │   └── js/
-│       └── visor.js                  ← PDF.js + StPageFlip (efecto flip)
+│       ├── pdf.min.js                ← PDF.js local
+│       ├── pdf.worker.min.js         ← Worker local de PDF.js
+│       └── visor.js                  ← Lector PDF simple
 └── readme.txt                        ← Este archivo
 
 == INSTALACIÓN ==
 
 1. Sube la carpeta "flipbook-manager" a /wp-content/plugins/
-2. Ve a WordPress Admin → Plugins → Activar "Flipbook Manager"
-3. Verás "Flipbooks" en el menú lateral
+2. Ve a WordPress Admin → Plugins → Activar "LeafBook PDF"
+3. Veras "Flipbooks" en el menu lateral
 
 == USO ==
 
@@ -37,10 +39,10 @@ flipbook-manager/
 5. Copia el shortcode que aparece: [flipbook id="X"]
 6. Pega ese shortcode en cualquier página o entrada
 
-== ROADMAP ==
+== ESTADO ==
 
-✅ Fase 1: Estructura base, CPT, admin, shortcode
-✅ Fase 2: Visor con PDF.js + efecto flip con StPageFlip
-✅ Fase 3: Bloque Gutenberg nativo
-✅ Fase 4: Swipe móvil, zoom, miniaturas, descarga, barra de progreso
-🔜 Fase 5 (ideas): lightbox, tabla de contenidos editable, analytics de páginas vistas
+- CPT, admin, shortcode y bloque Gutenberg.
+- Lector PDF.js local sin dependencia de CDN.
+- Navegacion por botones, teclado y swipe movil.
+- Zoom de alta calidad por pinch o Ctrl/trackpad wheel.
+- Pantalla completa en desktop y movil.

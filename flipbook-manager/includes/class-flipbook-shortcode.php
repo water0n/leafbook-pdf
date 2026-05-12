@@ -1,8 +1,10 @@
 <?php
 /**
  * class-flipbook-shortcode.php
- * Shortcode [leafbook id="X"] — lee la config de apariencia por PDF
- * y renderiza solo los botones/info que corresponda.
+ * Shortcode [leafbook id="X"].
+ *
+ * Renderiza un lector PDF simple basado en PDF.js. La lectura, el zoom y
+ * pantalla completa viven en assets/js/visor.js.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -17,11 +19,9 @@ class Flipbook_Shortcode {
 
     public function registrar_assets() {
         wp_register_style( 'fbm-visor', FBM_PLUGIN_URL . 'assets/css/visor.css', array(), FBM_VERSION );
-        wp_register_script( 'pdfjs-lib',  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',               array(), '3.11.174', true );
-        // Worker LOCAL — evita bloqueos cross-origin en iframes
+        wp_register_script( 'pdfjs-lib',  FBM_PLUGIN_URL . 'assets/js/pdf.min.js', array(), '3.11.174', true );
         wp_register_script( 'pdfjs-worker', FBM_PLUGIN_URL . 'assets/js/pdf.worker.min.js', array(), '3.11.174', true );
-        wp_register_script( 'stpageflip', 'https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js',       array(), '2.0.7',    true );
-        wp_register_script( 'fbm-visor',  FBM_PLUGIN_URL . 'assets/js/visor.js', array('pdfjs-lib','stpageflip'), FBM_VERSION, true );
+        wp_register_script( 'fbm-visor',  FBM_PLUGIN_URL . 'assets/js/visor.js', array('pdfjs-lib'), FBM_VERSION, true );
     }
 
     public function render_shortcode( $atts ) {
@@ -53,19 +53,15 @@ class Flipbook_Shortcode {
         wp_enqueue_style( 'fbm-visor' );
         wp_enqueue_script( 'fbm-visor' );
 
-        // visor.js maneja su propio init defensivo (funciona en iframe y shortcode).
-
         $tema = $cfg['tema_botones'] ?? 'oscuro';
         wp_localize_script( 'fbm-visor', 'fbmData_' . $pid, array(
             'pdfUrl'    => esc_url( $proxy_url ),
-            'pdfDireto' => esc_url( $pdf_url ),
+            'pdfDirect' => esc_url( $pdf_url ),
             'ancho'     => $ancho,
             'alto'      => $alto,
             'autoplay'  => $autoplay,
             'workerSrc' => FBM_PLUGIN_URL . 'assets/js/pdf.worker.min.js?v=' . FBM_VERSION,
             'tema'      => $tema,
-            'calidad'   => floatval( $cfg['calidad'] ?? 0.85 ),
-            'escala'    => floatval( $cfg['escala'] ?? 1.5 ),
         ));
 
         // ── CSS inline con apariencia individual ──
@@ -95,111 +91,42 @@ class Flipbook_Shortcode {
             </div>
             <?php endif; ?>
 
-            <?php // ── Barra de controles ── ?>
-            <div class="fbm-controles" id="fbm-controles-<?php echo $pid; ?>">
-
-                <?php // Búsqueda (se muestra a la izquierda si activa) ?>
-                <?php // Grupo centro: navegación ?>
-                <div class="fbm-ctrl-grupo">
-                    <?php if ($cfg['btn_primera'] === '1'): ?>
-                    <button class="fbm-btn" data-accion="primera" data-id="<?php echo $pid; ?>" title="Primera página">⏮</button>
-                    <?php endif; ?>
-                    <?php if ($cfg['btn_anterior'] === '1'): ?>
-                    <button class="fbm-btn" data-accion="anterior" data-id="<?php echo $pid; ?>" title="Anterior">◀</button>
-                    <?php endif; ?>
-                    <span class="fbm-pagina-info" id="fbm-info-<?php echo $pid; ?>">Cargando…</span>
-                    <?php if ($cfg['btn_anterior'] === '1'): ?>
-                    <button class="fbm-btn" data-accion="siguiente" data-id="<?php echo $pid; ?>" title="Siguiente">▶</button>
-                    <?php endif; ?>
-                    <?php if ($cfg['btn_ultima'] === '1'): ?>
-                    <button class="fbm-btn" data-accion="ultima" data-id="<?php echo $pid; ?>" title="Última página">⏭</button>
-                    <?php endif; ?>
-                </div>
-
-                <?php // Grupo derecho: herramientas ?>
-                <div class="fbm-ctrl-grupo">
-                    <?php if ($cfg['btn_zoom'] === '1'): ?>
-                    <button class="fbm-btn" data-accion="zoom-menos" data-id="<?php echo $pid; ?>" title="Alejar">−</button>
-                    <span class="fbm-zoom-nivel" id="fbm-zoom-<?php echo $pid; ?>">100%</span>
-                    <button class="fbm-btn" data-accion="zoom-mas"   data-id="<?php echo $pid; ?>" title="Acercar">+</button>
-                    <?php endif; ?>
-
-                    <button class="fbm-btn" data-accion="miniaturas" data-id="<?php echo $pid; ?>" title="Miniaturas" id="fbm-btn-min-<?php echo $pid; ?>">⊞</button>
-
-                    <?php if ($cfg['btn_compartir'] === '1'): ?>
-                    <button class="fbm-btn" data-accion="compartir" data-id="<?php echo $pid; ?>"
-                            data-url="<?php echo esc_attr(get_permalink($pid)); ?>"
-                            data-titulo="<?php echo esc_attr(get_the_title($pid)); ?>"
-                            title="Compartir">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                        </svg>
-                    </button>
-                    <?php endif; ?>
-
-                    <?php if ($cfg['btn_imprimir'] === '1'): ?>
-                    <button class="fbm-btn" data-accion="imprimir" data-id="<?php echo $pid; ?>"
-                            data-url="<?php echo esc_attr(add_query_arg('lbpdf_proxy',$pid,home_url('/'))); ?>"
-                            title="Imprimir">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                            <rect x="6" y="14" width="12" height="8"/>
-                        </svg>
-                    </button>
-                    <?php endif; ?>
-
-                    <?php if ($cfg['btn_descarga'] === '1'): ?>
-                    <a class="fbm-btn" href="<?php echo esc_url(add_query_arg('lbpdf_proxy',$pid,home_url('/'))); ?>" download="<?php echo esc_attr(sanitize_file_name(get_the_title($pid)).'.pdf'); ?>" title="Descargar PDF" target="_blank">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                    </a>
-                    <?php endif; ?>
-
-                    <?php if ($cfg['btn_fullscreen'] === '1'): ?>
-                    <button class="fbm-btn fbm-btn-fs" data-accion="fullscreen" data-id="<?php echo $pid; ?>"
-                            id="fbm-btn-fs-<?php echo $pid; ?>" title="Pantalla completa (F)">
-                        <svg class="icon-expand" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-                            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-                        </svg>
-                        <svg class="icon-compress" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
-                            <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
-                        </svg>
-                    </button>
-                    <?php endif; ?>
-                </div>
-
-            </div><!-- .fbm-controles -->
-
-            <?php // ── Área principal ── ?>
-            <div class="fbm-area-principal">
-                <div class="fbm-panel-miniaturas" id="fbm-miniaturas-<?php echo $pid; ?>" aria-hidden="true">
-                    <div class="fbm-miniaturas-titulo">Páginas</div>
-                    <div class="fbm-miniaturas-grid" id="fbm-min-grid-<?php echo $pid; ?>"></div>
-                </div>
-                <div class="fbm-visor-wrap" id="fbm-visor-wrap-<?php echo $pid; ?>">
-                    <div id="fbm-visor-<?php echo $pid; ?>" class="fbm-visor"
-                         data-id="<?php echo $pid; ?>"
-                         data-pdf="<?php echo esc_url($pdf_url); ?>"
-                         data-ancho="<?php echo $ancho; ?>"
-                         data-alto="<?php echo $alto; ?>"
-                         style="width:100%;height:<?php echo $alto; ?>px;" tabindex="0">
-                        <div class="fbm-cargando" id="fbm-cargando-<?php echo $pid; ?>">
-                            <div class="fbm-spinner"></div>
-                            <p class="fbm-cargando-texto">Preparando PDF…</p>
-                            <div class="fbm-progreso-barra">
-                                <div class="fbm-progreso-fill" id="fbm-progreso-<?php echo $pid; ?>"></div>
-                            </div>
+            <div class="fbm-visor-wrap" id="fbm-visor-wrap-<?php echo $pid; ?>">
+                <div id="fbm-visor-<?php echo $pid; ?>" class="fbm-visor"
+                     data-id="<?php echo $pid; ?>"
+                     data-pdf="<?php echo esc_url($proxy_url); ?>"
+                     data-ancho="<?php echo $ancho; ?>"
+                     data-alto="<?php echo $alto; ?>"
+                     style="--fbm-height:<?php echo $alto; ?>px;" tabindex="0">
+                    <div class="fbm-stage" id="fbm-stage-<?php echo $pid; ?>">
+                        <button class="fbm-page-hotspot fbm-page-hotspot-prev" data-accion="anterior" data-id="<?php echo $pid; ?>" aria-label="Pagina anterior"></button>
+                        <div class="fbm-page-shell" id="fbm-page-shell-<?php echo $pid; ?>">
+                            <canvas class="fbm-page-canvas" id="fbm-canvas-<?php echo $pid; ?>"></canvas>
+                            <div class="fbm-link-layer" id="fbm-links-<?php echo $pid; ?>"></div>
                         </div>
+                        <button class="fbm-page-hotspot fbm-page-hotspot-next" data-accion="siguiente" data-id="<?php echo $pid; ?>" aria-label="Pagina siguiente"></button>
+                    </div>
+
+                    <div class="fbm-cargando" id="fbm-cargando-<?php echo $pid; ?>">
+                        <div class="fbm-spinner"></div>
+                        <p class="fbm-cargando-texto">Preparando PDF...</p>
+                    </div>
+
+                    <div class="fbm-controles" id="fbm-controles-<?php echo $pid; ?>">
+                        <button class="fbm-btn" data-accion="anterior" data-id="<?php echo $pid; ?>" title="Pagina anterior" aria-label="Pagina anterior">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        <span class="fbm-pagina-info" id="fbm-info-<?php echo $pid; ?>">...</span>
+                        <button class="fbm-btn" data-accion="siguiente" data-id="<?php echo $pid; ?>" title="Pagina siguiente" aria-label="Pagina siguiente">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                        <button class="fbm-btn fbm-btn-fs" data-accion="fullscreen" data-id="<?php echo $pid; ?>" title="Pantalla completa" aria-label="Pantalla completa">
+                            <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>
+                            <svg class="icon-compress" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M15 21v-6h6M9 21v-6H3"/></svg>
+                        </button>
                     </div>
                 </div>
             </div>
-
-
         </div><!-- .fbm-contenedor-externo -->
         <?php
         return ob_get_clean();

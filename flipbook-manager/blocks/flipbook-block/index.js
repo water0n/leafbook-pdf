@@ -155,7 +155,7 @@
                         '[flipbook id="' + attributes.flipbookId + '"]'
                     ),
                     el('p', { className: 'fbm-editor-preview-nota' },
-                        '✅ El visor se mostrará en el frontend cuando publiques.'
+                        'El lector se mostrará en el frontend cuando publiques.'
                     )
                 );
             }

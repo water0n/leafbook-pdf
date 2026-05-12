@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       LeafBook PDF
  * Plugin URI:        https://kaabapp.com
- * Description:       Gestiona PDFs con visor de volteo de pagina. Inserta con [leafbook id="X"] o iframe.
- * Version:           1.5.1
+ * Description:       Gestiona PDFs con un lector ligero basado en PDF.js. Inserta con [leafbook id="X"] o iframe.
+ * Version:           1.6.0
  * Author:            Daniel Zermeno
  * Author URI:        https://kaabapp.com
  * License:           GPL v2 or later
@@ -15,7 +15,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'FBM_VERSION',    '1.5.1' );
+define( 'FBM_VERSION',    '1.6.0' );
 define( 'FBM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FBM_PLUGIN_URL', plugin_dir_url( __FILE__ )  );
 
@@ -77,15 +77,61 @@ function lbpdf_proxy_handler() {
     while ( ob_get_level() > 0 ) ob_end_clean();
 
     if ( $pdf_path && file_exists($pdf_path) ) {
-        $size = filesize($pdf_path);
+        $size  = filesize($pdf_path);
+        $start = 0;
+        $end   = $size - 1;
+
+        if ( isset($_SERVER['HTTP_RANGE']) && preg_match('/bytes=(\d*)-(\d*)/', $_SERVER['HTTP_RANGE'], $matches) ) {
+            if ( $matches[1] === '' && $matches[2] !== '' ) {
+                $suffix = (int) $matches[2];
+                $start = max(0, $size - $suffix);
+            } elseif ( $matches[1] !== '' ) {
+                $start = (int) $matches[1];
+            }
+            if ( $matches[1] !== '' && $matches[2] !== '' ) {
+                $end = (int) $matches[2];
+            }
+            $end = min($end, $size - 1);
+
+            if ( $start > $end || $start >= $size ) {
+                header('Content-Range: bytes */' . $size);
+                http_response_code(416);
+                exit;
+            }
+
+            http_response_code(206);
+            header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
+        }
+
+        $length = $end - $start + 1;
+
         header('Content-Type: application/pdf');
-        header('Content-Length: ' . $size);
+        header('Content-Length: ' . $length);
         header('Content-Disposition: inline; filename="' . basename($pdf_path) . '"');
         header('Access-Control-Allow-Origin: *');
+        header('Accept-Ranges: bytes');
         header('Cache-Control: public, max-age=86400');
         header('X-Robots-Tag: noindex');
         header('X-LB-Source: disk');
-        readfile($pdf_path);
+
+        $handle = fopen($pdf_path, 'rb');
+        if ( $handle === false ) {
+            http_response_code(500);
+            exit;
+        }
+
+        fseek($handle, $start);
+        $remaining = $length;
+        while ( $remaining > 0 && ! feof($handle) ) {
+            $chunk = fread($handle, min(8192, $remaining));
+            if ( $chunk === false ) {
+                break;
+            }
+            echo $chunk;
+            $remaining -= strlen($chunk);
+            flush();
+        }
+        fclose($handle);
     } else {
         // Fallback: fetch remoto (cuando el attachment_id no esta o el path no existe)
         $resp = wp_remote_get( $pdf_url, array(
@@ -140,8 +186,7 @@ function lbpdf_embed_handler() {
     $proxy_url  = add_query_arg('lbpdf_proxy', $pid, home_url('/'));
 
     $css_url    = FBM_PLUGIN_URL . 'assets/css/visor.css?v='        . FBM_VERSION;
-    $pdfjs_url  = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    $flip_url   = 'https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js';
+    $pdfjs_url  = FBM_PLUGIN_URL . 'assets/js/pdf.min.js?v='        . FBM_VERSION;
     $worker_url = FBM_PLUGIN_URL . 'assets/js/pdf.worker.min.js?v=' . FBM_VERSION;
     $visor_url  = FBM_PLUGIN_URL . 'assets/js/visor.js?v='          . FBM_VERSION;
 
@@ -179,7 +224,6 @@ function lbpdf_embed_handler() {
 <body>
 <?php echo $html; ?>
 <script src="<?php echo esc_url($pdfjs_url); ?>"></script>
-<script src="<?php echo esc_url($flip_url); ?>"></script>
 <script>window['fbmData_<?php echo $pid; ?>'] = <?php echo $datos_js; ?>;</script>
 <script src="<?php echo esc_url($visor_url); ?>"></script>
 </body>
