@@ -112,20 +112,20 @@ class Flipbook_Settings {
                 <div>
                     <h1>LeafBook PDF</h1>
                     <p>by <strong style="color:#cbd5e1">KaabApp.com</strong> · Daniel Zermeno &nbsp;·&nbsp; Versión <?php echo FBM_VERSION; ?></p>
-                    <p style="margin-top:6px;">Gestiona tus PDFs y obten un ID único para incrustarlos donde quieras. <a href="<?php echo admin_url('post-new.php?post_type=flipbook'); ?>" style="color:#60a5fa;">+ Agregar PDF →</a></p>
+                    <p style="margin-top:6px;">Gestiona tus PDFs y obten un ID único para incrustarlos donde quieras.</p>
                 </div>
             </div>
 
             <div class="lbpdf-cards">
                 <div class="lbpdf-card">
-                    <div class="lbpdf-card-num"><?php echo $publicados; ?></div>
-                    <div class="lbpdf-card-label">PDFs registrados</div>
-                    <a class="lbpdf-card-accion" href="<?php echo admin_url('edit.php?post_type=flipbook'); ?>">Ver todas →</a>
+                    <div class="lbpdf-card-num">+</div>
+                    <div class="lbpdf-card-label">Crear nuevo LeafBook</div>
+                    <a class="lbpdf-card-accion" href="<?php echo admin_url('post-new.php?post_type=flipbook'); ?>">Agregar PDF →</a>
                 </div>
                 <div class="lbpdf-card">
-                    <div class="lbpdf-card-num" style="font-size:22px;">[leafbook id="X"]</div>
-                    <div class="lbpdf-card-label">Incrustar en cualquier sitio</div>
-                    <a class="lbpdf-card-accion" href="<?php echo admin_url('admin.php?page=lbpdf-ajustes#iframe'); ?>">Generar iframe →</a>
+                    <div class="lbpdf-card-num"><?php echo $publicados; ?></div>
+                    <div class="lbpdf-card-label">PDFs registrados</div>
+                    <a class="lbpdf-card-accion" href="<?php echo admin_url('edit.php?post_type=flipbook'); ?>">Ver todos →</a>
                 </div>
                 <div class="lbpdf-card">
                     <div class="lbpdf-card-num">✅</div>
@@ -249,16 +249,13 @@ class Flipbook_Settings {
                         </td>
                     </tr>
                     <tr>
-                        <th>Color de barra de controles</th>
-                        <td><input type="color" name="<?php echo self::OPCION; ?>[color_barra]" value="<?php echo esc_attr($this->val('color_barra','#0f172a')); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th>Fondo de botones</th>
-                        <td><input type="color" name="<?php echo self::OPCION; ?>[color_botones]" value="<?php echo esc_attr($this->val('color_botones','#2a3547')); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th>Texto de botones</th>
-                        <td><input type="color" name="<?php echo self::OPCION; ?>[color_btn_texto]" value="<?php echo esc_attr($this->val('color_btn_texto','#d1d5db')); ?>"></td>
+                        <th>Controles del visor</th>
+                        <td>
+                            <p class="lbpdf-hint" style="margin-top:0;">Los botones usan un diseño fijo para que shortcode e iframe se vean igual.</p>
+                            <input type="hidden" name="<?php echo self::OPCION; ?>[color_barra]" value="<?php echo esc_attr($this->val('color_barra','#0f172a')); ?>">
+                            <input type="hidden" name="<?php echo self::OPCION; ?>[color_botones]" value="<?php echo esc_attr($this->val('color_botones','#2a3547')); ?>">
+                            <input type="hidden" name="<?php echo self::OPCION; ?>[color_btn_texto]" value="<?php echo esc_attr($this->val('color_btn_texto','#d1d5db')); ?>">
+                        </td>
                     </tr>
                     <tr>
                         <th>Redondez de bordes</th>
@@ -399,9 +396,6 @@ class Flipbook_Settings {
         $c1    = $this->val('fondo_color', '#1a2234');
         $c2    = $this->val('fondo_color2','#111827');
         $img   = $this->val('fondo_imagen_url','');
-        $barra = $this->val('color_barra', '#0f172a');
-        $btn   = $this->val('color_botones','#2a3547');
-        $btntx = $this->val('color_btn_texto','#d1d5db');
         $rad   = intval($this->val('radio_bordes','12'));
         $sombra = $this->val('sombra','1') === '1';
 
@@ -411,17 +405,14 @@ class Flipbook_Settings {
         else                                    $fondo = 'background:' . $c1 . ';';
 
         $transparencia_css = $tipo === 'sin_fondo'
-            ? '.fbm-contenedor-externo,.fbm-area-principal,.fbm-visor-wrap,.fbm-visor,.fbm-cargando,.fbm-controles,.fbm-info-bar,.fbm-panel-miniaturas,.fbm-search-resultados{background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}.fbm-panel-miniaturas.fbm-miniaturas--visible{border-color:transparent!important;}.fbm-btn{background:rgba(255,255,255,0.78)!important;border-color:rgba(15,23,42,0.10)!important;color:#0f172a!important;box-shadow:none!important;}.fbm-btn:hover{background:rgba(255,255,255,0.94)!important;border-color:rgba(15,23,42,0.16)!important;color:#020617!important;}.fbm-btn--activo,.fbm-btn-fs,.fbm-btn-fs.fs-activo{background:rgba(96,165,250,0.14)!important;border-color:rgba(59,130,246,0.28)!important;color:#1d4ed8!important;}.fbm-pagina-info,.fbm-zoom-nivel,.fbm-miniaturas-titulo{color:rgba(15,23,42,0.62)!important;opacity:1!important;}.fbm-miniatura span{background:rgba(255,255,255,0.88)!important;color:rgba(15,23,42,0.72)!important;}.fbm-progreso-barra{background:rgba(15,23,42,0.08)!important;}.fbm-progreso-fill{opacity:0.72!important;}'
+            ? '.fbm-contenedor-externo,.fbm-area-principal,.fbm-visor-wrap,.fbm-visor,.fbm-cargando,.fbm-info-bar,.fbm-panel-miniaturas,.fbm-search-resultados{background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}.fbm-panel-miniaturas.fbm-miniaturas--visible{border-color:transparent!important;}.fbm-zoom-nivel,.fbm-miniaturas-titulo{color:rgba(15,23,42,0.62)!important;opacity:1!important;}.fbm-miniatura span{background:rgba(255,255,255,0.88)!important;color:rgba(15,23,42,0.72)!important;}.fbm-progreso-barra{background:rgba(15,23,42,0.08)!important;}.fbm-progreso-fill{opacity:0.72!important;}'
             : '';
 
-        $barra_css = $tipo === 'sin_fondo' ? 'transparent' : $barra;
         $sombra_css = $sombra ? 'box-shadow:0 20px 60px rgba(0,0,0,.45);' : 'box-shadow:none;';
 
         echo '<style id="lbpdf-estilos">
 .fbm-contenedor-externo{border-radius:' . $rad . 'px!important;' . $sombra_css . '}
 .fbm-visor,.fbm-cargando{' . $fondo . '}
-.fbm-controles{background:' . $barra_css . '!important;}
-.fbm-btn{background:' . $btn . '!important;color:' . $btntx . '!important;}
 ' . $transparencia_css . '
 </style>' . "\n";
     }
