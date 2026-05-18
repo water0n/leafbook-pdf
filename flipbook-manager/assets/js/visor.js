@@ -26,15 +26,17 @@
         this.pageNumber = 1;
         this.pageCount = 0;
         this.zoom = 1;
-        this.minZoom = 0.8;
+        this.minZoom = 1;
         this.maxZoom = 4;
         this.fitScale = 1;
+        this.currentCssScale = 1;
         this.renderTask = null;
         this.renderToken = 0;
         this.isDragging = false;
         this.dragStart = null;
-        this.lastTap = 0;
+        this.turnStart = null;
         this.touchStart = null;
+        this.touchPanStart = null;
         this.pinchStart = null;
 
         this.stage = node.querySelector('.fbm-stage');
@@ -99,6 +101,12 @@
             } else if (event.key === 'ArrowRight' || event.key === ' ') {
                 event.preventDefault();
                 self.next();
+            } else if (event.key === '+' || event.key === '=') {
+                self.setZoom(self.zoom * 1.15, self.viewportCenterAnchor());
+            } else if (event.key === '-') {
+                self.setZoom(self.zoom / 1.15, self.viewportCenterAnchor());
+            } else if (event.key === '0') {
+                self.setZoom(1, self.viewportCenterAnchor());
             } else if (event.key === 'Home') {
                 self.goTo(1);
             } else if (event.key === 'End') {
@@ -109,28 +117,37 @@
         });
 
         this.stage.addEventListener('wheel', function (event) {
-            if (!event.ctrlKey && !event.metaKey) {
-                return;
-            }
-
             event.preventDefault();
-            self.zoomBy(event.deltaY < 0 ? 0.14 : -0.14);
+            var factor = Math.exp(-event.deltaY * 0.0012);
+            self.setZoom(self.zoom * factor, self.pointerAnchor(event.clientX, event.clientY));
         }, { passive: false });
 
         this.stage.addEventListener('pointerdown', function (event) {
-            if (event.button !== 0 || self.zoom <= 1.02) {
+            if (event.pointerType === 'touch' || event.button !== 0 || event.target.closest('a')) {
                 return;
             }
 
-            self.isDragging = true;
-            self.dragStart = {
+            self.node.focus({ preventScroll: true });
+
+            if (self.zoom > 1.02) {
+                self.isDragging = true;
+                self.dragStart = {
+                    x: event.clientX,
+                    y: event.clientY,
+                    left: self.stage.scrollLeft,
+                    top: self.stage.scrollTop
+                };
+                self.stage.setPointerCapture(event.pointerId);
+                self.stage.classList.add('is-dragging');
+                return;
+            }
+
+            self.turnStart = {
                 x: event.clientX,
                 y: event.clientY,
-                left: self.stage.scrollLeft,
-                top: self.stage.scrollTop
+                time: Date.now()
             };
             self.stage.setPointerCapture(event.pointerId);
-            self.stage.classList.add('is-dragging');
         });
 
         this.stage.addEventListener('pointermove', function (event) {
@@ -142,38 +159,77 @@
             self.stage.scrollTop = self.dragStart.top - (event.clientY - self.dragStart.y);
         });
 
-        ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (name) {
+        this.stage.addEventListener('pointerup', function (event) {
+            if (self.isDragging) {
+                self.stopDragging();
+                return;
+            }
+
+            if (!self.turnStart) {
+                return;
+            }
+
+            var dx = event.clientX - self.turnStart.x;
+            var dy = event.clientY - self.turnStart.y;
+            var elapsed = Date.now() - self.turnStart.time;
+            self.turnStart = null;
+
+            if (elapsed < 900 && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+                if (dx < 0) {
+                    self.next();
+                } else {
+                    self.prev();
+                }
+            }
+        });
+
+        ['pointercancel', 'pointerleave'].forEach(function (name) {
             self.stage.addEventListener(name, function () {
-                self.isDragging = false;
-                self.dragStart = null;
-                self.stage.classList.remove('is-dragging');
+                self.stopDragging();
+                self.turnStart = null;
             });
         });
 
         this.stage.addEventListener('touchstart', function (event) {
+            self.node.focus({ preventScroll: true });
+
             if (event.touches.length === 1) {
                 self.touchStart = {
                     x: event.touches[0].clientX,
                     y: event.touches[0].clientY,
                     time: Date.now()
                 };
+                self.touchPanStart = self.zoom > 1.02 ? {
+                    x: event.touches[0].clientX,
+                    y: event.touches[0].clientY,
+                    left: self.stage.scrollLeft,
+                    top: self.stage.scrollTop
+                } : null;
             } else if (event.touches.length === 2) {
                 self.pinchStart = {
                     distance: self.touchDistance(event),
                     zoom: self.zoom
                 };
+                self.touchStart = null;
+                self.touchPanStart = null;
             }
         }, { passive: true });
 
         this.stage.addEventListener('touchmove', function (event) {
-            if (event.touches.length !== 2 || !self.pinchStart) {
+            if (event.touches.length === 2 && self.pinchStart) {
+                event.preventDefault();
+                var distance = self.touchDistance(event);
+                var ratio = distance / self.pinchStart.distance;
+                var center = self.touchCenter(event);
+                self.setZoom(self.pinchStart.zoom * ratio, self.pointerAnchor(center.x, center.y));
                 return;
             }
 
-            event.preventDefault();
-            var distance = self.touchDistance(event);
-            var ratio = distance / self.pinchStart.distance;
-            self.setZoom(self.pinchStart.zoom * ratio);
+            if (event.touches.length === 1 && self.touchPanStart && self.zoom > 1.02) {
+                event.preventDefault();
+                self.stage.scrollLeft = self.touchPanStart.left - (event.touches[0].clientX - self.touchPanStart.x);
+                self.stage.scrollTop = self.touchPanStart.top - (event.touches[0].clientY - self.touchPanStart.y);
+            }
         }, { passive: false });
 
         this.stage.addEventListener('touchend', function (event) {
@@ -182,7 +238,13 @@
                 return;
             }
 
-            if (!self.touchStart) {
+            if (self.touchPanStart) {
+                self.touchPanStart = null;
+                self.touchStart = null;
+                return;
+            }
+
+            if (!self.touchStart || !event.changedTouches.length) {
                 return;
             }
 
@@ -192,7 +254,7 @@
             var elapsed = Date.now() - self.touchStart.time;
             self.touchStart = null;
 
-            if (self.zoom > 1.02 || elapsed > 500 || Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) {
+            if (self.zoom > 1.02 || elapsed > 700 || Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) {
                 return;
             }
 
@@ -205,15 +267,21 @@
 
         this.stage.addEventListener('dblclick', function (event) {
             event.preventDefault();
-            self.setZoom(self.zoom > 1.05 ? 1 : 2);
+            self.setZoom(self.zoom > 1.05 ? 1 : 2, self.pointerAnchor(event.clientX, event.clientY));
         });
 
         document.addEventListener('fullscreenchange', function () {
             self.node.classList.toggle('is-fullscreen', document.fullscreenElement === self.node);
-            self.render();
+            self.render({ preserveScroll: true });
         });
 
         window.addEventListener('resize', this.onResize);
+    };
+
+    LeafBookViewer.prototype.stopDragging = function () {
+        this.isDragging = false;
+        this.dragStart = null;
+        this.stage.classList.remove('is-dragging');
     };
 
     LeafBookViewer.prototype.handleAction = function (action) {
@@ -226,46 +294,48 @@
         }
     };
 
-    LeafBookViewer.prototype.goTo = function (pageNumber) {
+    LeafBookViewer.prototype.goTo = function (pageNumber, direction) {
         if (!this.pdf || !this.pageCount) {
             return Promise.resolve();
         }
 
         this.pageNumber = clamp(pageNumber, 1, this.pageCount);
         this.zoom = 1;
+        this.updateZoomState();
         this.updateInfo();
-        return this.render();
+        this.animateTurn(direction);
+        return this.render({ center: true });
     };
 
     LeafBookViewer.prototype.prev = function () {
         if (this.pageNumber > 1) {
-            this.goTo(this.pageNumber - 1);
+            this.goTo(this.pageNumber - 1, 'prev');
         }
     };
 
     LeafBookViewer.prototype.next = function () {
         if (this.pageNumber < this.pageCount) {
-            this.goTo(this.pageNumber + 1);
+            this.goTo(this.pageNumber + 1, 'next');
         }
     };
 
-    LeafBookViewer.prototype.setZoom = function (zoom) {
+    LeafBookViewer.prototype.setZoom = function (zoom, anchor) {
         var nextZoom = clamp(zoom, this.minZoom, this.maxZoom);
-        if (Math.abs(nextZoom - this.zoom) < 0.02) {
+        if (Math.abs(nextZoom - this.zoom) < 0.015) {
             return;
         }
 
         this.zoom = nextZoom;
-        this.render();
+        this.updateZoomState();
+        this.render({ anchor: anchor || this.viewportCenterAnchor() });
     };
 
-    LeafBookViewer.prototype.zoomBy = function (amount) {
-        this.setZoom(this.zoom + amount);
-    };
-
-    LeafBookViewer.prototype.render = function () {
+    LeafBookViewer.prototype.render = function (options) {
         var self = this;
         var token = ++this.renderToken;
+        var scrollSnapshot = this.snapshotScroll();
+
+        options = options || {};
 
         if (!this.pdf) {
             return Promise.resolve();
@@ -275,8 +345,6 @@
             this.renderTask.cancel();
             this.renderTask = null;
         }
-
-        this.node.classList.add('is-rendering');
 
         return this.pdf.getPage(this.pageNumber).then(function (page) {
             if (token !== self.renderToken) {
@@ -290,27 +358,21 @@
             var availableHeight = Math.max(260, self.stage.clientHeight - padding);
 
             self.fitScale = Math.min(availableWidth / baseViewport.width, availableHeight / baseViewport.height);
-            var cssScale = self.fitScale * self.zoom;
-            var viewport = page.getViewport({ scale: cssScale });
+            self.currentCssScale = self.fitScale * self.zoom;
+
+            var viewport = page.getViewport({ scale: self.currentCssScale });
             var dpr = clamp(window.devicePixelRatio || 1, 1, 2.5);
-            var outputScale = cssScale * dpr;
-            var renderViewport = page.getViewport({ scale: outputScale });
+            var renderViewport = page.getViewport({ scale: self.currentCssScale * dpr });
+            var tempCanvas = document.createElement('canvas');
+            var tempContext = tempCanvas.getContext('2d', { alpha: false });
 
-            self.canvas.width = Math.floor(renderViewport.width);
-            self.canvas.height = Math.floor(renderViewport.height);
-            self.canvas.style.width = Math.floor(viewport.width) + 'px';
-            self.canvas.style.height = Math.floor(viewport.height) + 'px';
-            self.shell.style.width = Math.floor(viewport.width) + 'px';
-            self.shell.style.height = Math.floor(viewport.height) + 'px';
-            self.links.style.width = Math.floor(viewport.width) + 'px';
-            self.links.style.height = Math.floor(viewport.height) + 'px';
-
-            self.ctx.setTransform(1, 0, 0, 1, 0, 0);
-            self.ctx.fillStyle = '#ffffff';
-            self.ctx.fillRect(0, 0, self.canvas.width, self.canvas.height);
+            tempCanvas.width = Math.floor(renderViewport.width);
+            tempCanvas.height = Math.floor(renderViewport.height);
+            tempContext.fillStyle = '#ffffff';
+            tempContext.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
             self.renderTask = page.render({
-                canvasContext: self.ctx,
+                canvasContext: tempContext,
                 viewport: renderViewport
             });
 
@@ -320,9 +382,9 @@
                 }
 
                 self.renderTask = null;
+                self.paintCanvas(tempCanvas, viewport);
                 self.renderLinks(page, viewport, token);
-                self.centerPage();
-                self.node.classList.remove('is-rendering');
+                self.restoreViewport(options, scrollSnapshot);
                 self.updateInfo();
                 return null;
             }).catch(function (error) {
@@ -333,6 +395,50 @@
                 return null;
             });
         });
+    };
+
+    LeafBookViewer.prototype.paintCanvas = function (sourceCanvas, viewport) {
+        var cssWidth = Math.floor(viewport.width);
+        var cssHeight = Math.floor(viewport.height);
+
+        this.shell.style.transform = '';
+        this.shell.style.width = cssWidth + 'px';
+        this.shell.style.height = cssHeight + 'px';
+        this.links.style.width = cssWidth + 'px';
+        this.links.style.height = cssHeight + 'px';
+        this.layoutShell(cssWidth, cssHeight);
+
+        this.canvas.width = sourceCanvas.width;
+        this.canvas.height = sourceCanvas.height;
+        this.canvas.style.width = cssWidth + 'px';
+        this.canvas.style.height = cssHeight + 'px';
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.drawImage(sourceCanvas, 0, 0);
+    };
+
+    LeafBookViewer.prototype.layoutShell = function (width, height) {
+        var extraBottom = 80;
+        var horizontal = Math.max(18, Math.floor((this.stage.clientWidth - width) / 2));
+        var top = Math.max(18, Math.floor((this.stage.clientHeight - height - extraBottom) / 2));
+        var bottom = Math.max(extraBottom, top);
+
+        if (this.zoom > 1.02) {
+            horizontal = 24;
+            top = 24;
+            bottom = 110;
+        }
+
+        this.shell.style.margin = top + 'px ' + horizontal + 'px ' + bottom + 'px ' + horizontal + 'px';
+    };
+
+    LeafBookViewer.prototype.restoreViewport = function (options, scrollSnapshot) {
+        if (options.anchor) {
+            this.applyAnchor(options.anchor);
+        } else if (options.preserveScroll && scrollSnapshot) {
+            this.restoreScrollRatio(scrollSnapshot);
+        } else {
+            this.centerPage();
+        }
     };
 
     LeafBookViewer.prototype.renderLinks = function (page, viewport, token) {
@@ -366,11 +472,45 @@
         });
     };
 
+    LeafBookViewer.prototype.pointerAnchor = function (clientX, clientY) {
+        var stageRect = this.stage.getBoundingClientRect();
+        var shellRect = this.shell.getBoundingClientRect();
+        var width = Math.max(1, shellRect.width);
+        var height = Math.max(1, shellRect.height);
+
+        return {
+            rx: clamp((clientX - shellRect.left) / width, 0, 1),
+            ry: clamp((clientY - shellRect.top) / height, 0, 1),
+            viewportX: clientX - stageRect.left,
+            viewportY: clientY - stageRect.top
+        };
+    };
+
+    LeafBookViewer.prototype.viewportCenterAnchor = function () {
+        var rect = this.stage.getBoundingClientRect();
+        return this.pointerAnchor(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    };
+
+    LeafBookViewer.prototype.applyAnchor = function (anchor) {
+        this.stage.scrollLeft = this.shell.offsetLeft + this.shell.offsetWidth * anchor.rx - anchor.viewportX;
+        this.stage.scrollTop = this.shell.offsetTop + this.shell.offsetHeight * anchor.ry - anchor.viewportY;
+    };
+
+    LeafBookViewer.prototype.snapshotScroll = function () {
+        return {
+            leftRatio: this.stage.scrollLeft / Math.max(1, this.stage.scrollWidth - this.stage.clientWidth),
+            topRatio: this.stage.scrollTop / Math.max(1, this.stage.scrollHeight - this.stage.clientHeight)
+        };
+    };
+
+    LeafBookViewer.prototype.restoreScrollRatio = function (snapshot) {
+        this.stage.scrollLeft = snapshot.leftRatio * Math.max(0, this.stage.scrollWidth - this.stage.clientWidth);
+        this.stage.scrollTop = snapshot.topRatio * Math.max(0, this.stage.scrollHeight - this.stage.clientHeight);
+    };
+
     LeafBookViewer.prototype.centerPage = function () {
-        var maxLeft = Math.max(0, this.stage.scrollWidth - this.stage.clientWidth);
-        var maxTop = Math.max(0, this.stage.scrollHeight - this.stage.clientHeight);
-        this.stage.scrollLeft = maxLeft / 2;
-        this.stage.scrollTop = maxTop / 2;
+        this.stage.scrollLeft = Math.max(0, this.shell.offsetLeft - (this.stage.clientWidth - this.shell.offsetWidth) / 2);
+        this.stage.scrollTop = Math.max(0, this.shell.offsetTop - (this.stage.clientHeight - this.shell.offsetHeight) / 2);
     };
 
     LeafBookViewer.prototype.updateInfo = function () {
@@ -384,6 +524,22 @@
         }
 
         this.info.textContent = this.pageNumber + ' / ' + this.pageCount;
+    };
+
+    LeafBookViewer.prototype.updateZoomState = function () {
+        this.node.classList.toggle('is-zoomed', this.zoom > 1.02);
+    };
+
+    LeafBookViewer.prototype.animateTurn = function (direction) {
+        var self = this;
+        if (!direction) {
+            return;
+        }
+
+        this.shell.classList.remove('is-turning-next', 'is-turning-prev');
+        window.requestAnimationFrame(function () {
+            self.shell.classList.add(direction === 'next' ? 'is-turning-next' : 'is-turning-prev');
+        });
     };
 
     LeafBookViewer.prototype.toggleFullscreen = function () {
@@ -410,6 +566,13 @@
         var dx = second.clientX - first.clientX;
         var dy = second.clientY - first.clientY;
         return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    LeafBookViewer.prototype.touchCenter = function (event) {
+        return {
+            x: (event.touches[0].clientX + event.touches[1].clientX) / 2,
+            y: (event.touches[0].clientY + event.touches[1].clientY) / 2
+        };
     };
 
     LeafBookViewer.prototype.debounce = function (callback, wait) {

@@ -43,5 +43,56 @@ class Flipbook_CPT {
             'supports'           => array( 'title' ),
             'show_in_rest'       => true,
         ) );
+
+        $this->registrar_meta_rest();
+    }
+
+    private function registrar_meta_rest() {
+        $auth_callback = function( $allowed, $meta_key, $post_id ) {
+            if ( $post_id ) {
+                return current_user_can( 'edit_post', $post_id );
+            }
+            return current_user_can( 'edit_posts' );
+        };
+
+        $meta = array(
+            '_fbm_pdf_url' => array(
+                'type'              => 'string',
+                'single'            => true,
+                'sanitize_callback' => 'esc_url_raw',
+            ),
+            '_fbm_pdf_attachment_id' => array(
+                'type'              => 'integer',
+                'single'            => true,
+                'sanitize_callback' => 'absint',
+            ),
+            '_fbm_ancho' => array(
+                'type'              => 'integer',
+                'single'            => true,
+                'sanitize_callback' => 'absint',
+            ),
+            '_fbm_alto' => array(
+                'type'              => 'integer',
+                'single'            => true,
+                'sanitize_callback' => 'absint',
+            ),
+            '_fbm_autoplay' => array(
+                'type'              => 'string',
+                'single'            => true,
+                'sanitize_callback' => 'sanitize_text_field',
+            ),
+            '_fbm_permitir_descarga' => array(
+                'type'              => 'string',
+                'single'            => true,
+                'sanitize_callback' => 'sanitize_text_field',
+            ),
+        );
+
+        foreach ( $meta as $key => $args ) {
+            register_post_meta( 'flipbook', $key, array_merge( $args, array(
+                'show_in_rest'  => true,
+                'auth_callback' => $auth_callback,
+            ) ) );
+        }
     }
 }

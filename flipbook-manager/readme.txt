@@ -1,5 +1,5 @@
 === LeafBook PDF ===
-Version: 1.6.0
+Version: 1.6.2
 
 == ESTRUCTURA DEL PLUGIN ==
 
@@ -46,3 +46,5 @@ flipbook-manager/
 - Navegacion por botones, teclado y swipe movil.
 - Zoom de alta calidad por pinch o Ctrl/trackpad wheel.
 - Pantalla completa en desktop y movil.
+- Metadatos `_fbm_*` expuestos en REST para crear PDFs desde integraciones externas.
+- Visor sin sombra por defecto y controles reforzados sobre el contenido.

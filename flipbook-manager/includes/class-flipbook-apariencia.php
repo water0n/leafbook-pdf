@@ -47,7 +47,7 @@ class Flipbook_Apariencia {
             'color_botones'    => '#2a3547',
             'color_btn_texto'  => '#d1d5db',
             'radio_bordes'     => '12',
-            'sombra'           => '1',
+            'sombra'           => '0',
         );
     }
 
@@ -762,7 +762,7 @@ class Flipbook_Apariencia {
             : '';
 
         $barra_css = $tipo === 'sin_fondo' ? 'transparent' : $barra;
-        $sombra_css = $sombra ? 'box-shadow:0 16px 48px rgba(0,0,0,.35)' : 'box-shadow:none';
+        $sombra_css = $sombra ? 'box-shadow:0 10px 26px rgba(0,0,0,.18)' : 'box-shadow:none';
 
         return '<style>'
             . '#fbm-wrap-' . $post_id . '{border-radius:' . $rad . 'px;' . $sombra_css . '}'
