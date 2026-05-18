@@ -234,36 +234,13 @@ class Flipbook_Apariencia {
             <!-- ══ APARIENCIA VISUAL ════════════════════════════ -->
             <div class="lap-section">
                 <p class="lap-sec-title">Apariencia visual</p>
-
-                <!-- ── Tema de botones ── -->
-                <div style="margin-bottom:18px;">
-                    <p style="font-size:11px;font-weight:700;color:#50575e;margin:0 0 10px;text-transform:uppercase;letter-spacing:.05em;">Tema de botones</p>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;" id="lap-temas-wrap">
-                        <?php
-                        $temas = array(
-                            'oscuro'       => array('#0f172a', '#d1d5db', 'Oscuro'),
-                            'claro'        => array('#f1f5f9', '#374151', 'Claro'),
-                            'azul'         => array('#1e3a5f', '#bfdbfe', 'Azul'),
-                            'verde'        => array('#14532d', '#bbf7d0', 'Verde'),
-                            'rojo'         => array('#7f1d1d', '#fecaca', 'Rojo'),
-                            'transparente' => array('transparent', '#e2e8f0', 'Mínimo'),
-                        );
-                        $tema_actual = $cfg['tema_botones'] ?? 'oscuro';
-                        foreach ($temas as $slug => list($bg, $txt, $nombre)): ?>
-                        <label style="cursor:pointer;">
-                            <input type="radio" name="lbpdf_ap[tema_botones]" value="<?php echo $slug; ?>"
-                                   <?php checked($tema_actual, $slug); ?>
-                                   style="display:none;" onchange="lapAplicarTema(this)">
-                            <span class="lap-tema-opt <?php echo $tema_actual===$slug ? 'activo' : ''; ?>"
-                                  style="display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:7px;border:2px solid <?php echo $tema_actual===$slug ? '#2271b1' : '#e2e4e7'; ?>;background:<?php echo $bg; ?>;color:<?php echo $txt; ?>;font-size:12px;font-weight:600;transition:.15s;user-select:none;">
-                                <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:<?php echo $txt; ?>;"></span>
-                                <?php echo $nombre; ?>
-                            </span>
-                        </label>
-                        <?php endforeach; ?>
-                    </div>
-                    <p style="font-size:11px;color:#787c82;margin:6px 0 0;">El tema aplica colores predefinidos a la barra y los botones. Puedes sobreescribir los colores abajo.</p>
-                </div>
+                <p style="margin:0 0 14px;color:#50575e;font-size:13px;line-height:1.5;">
+                    Los botones usan un diseño fijo para que se vean igual en shortcode e iframe.
+                </p>
+                <input type="hidden" name="lbpdf_ap[tema_botones]" value="oscuro">
+                <input type="hidden" name="lbpdf_ap[color_barra]" value="<?php echo esc_attr($cfg['color_barra']); ?>">
+                <input type="hidden" name="lbpdf_ap[color_botones]" value="<?php echo esc_attr($cfg['color_botones']); ?>">
+                <input type="hidden" name="lbpdf_ap[color_btn_texto]" value="<?php echo esc_attr($cfg['color_btn_texto']); ?>">
 
                 <!-- Tipo de fondo -->
                 <div style="margin-bottom:10px;">
@@ -314,42 +291,6 @@ class Flipbook_Apariencia {
                             <input type="text"  id="lap-t-fondo2" name="lbpdf_ap[fondo_color2]"
                                    value="<?php echo esc_attr($cfg['fondo_color2']); ?>"
                                    oninput="document.getElementById('lap-c-fondo2').value=this.value" maxlength="7">
-                        </div>
-                    </div>
-
-                    <!-- Color barra -->
-                    <div class="lap-color-item">
-                        <label>Color barra de controles</label>
-                        <div class="lap-color-row">
-                            <input type="color" id="lap-c-barra" value="<?php echo esc_attr($cfg['color_barra']); ?>"
-                                   oninput="document.getElementById('lap-t-barra').value=this.value">
-                            <input type="text"  id="lap-t-barra" name="lbpdf_ap[color_barra]"
-                                   value="<?php echo esc_attr($cfg['color_barra']); ?>"
-                                   oninput="document.getElementById('lap-c-barra').value=this.value" maxlength="7">
-                        </div>
-                    </div>
-
-                    <!-- Color botones -->
-                    <div class="lap-color-item">
-                        <label>Fondo de botones</label>
-                        <div class="lap-color-row">
-                            <input type="color" id="lap-c-btn" value="<?php echo esc_attr($cfg['color_botones']); ?>"
-                                   oninput="document.getElementById('lap-t-btn').value=this.value">
-                            <input type="text"  id="lap-t-btn" name="lbpdf_ap[color_botones]"
-                                   value="<?php echo esc_attr($cfg['color_botones']); ?>"
-                                   oninput="document.getElementById('lap-c-btn').value=this.value" maxlength="7">
-                        </div>
-                    </div>
-
-                    <!-- Color texto botones -->
-                    <div class="lap-color-item">
-                        <label>Texto de botones</label>
-                        <div class="lap-color-row">
-                            <input type="color" id="lap-c-btntx" value="<?php echo esc_attr($cfg['color_btn_texto']); ?>"
-                                   oninput="document.getElementById('lap-t-btntx').value=this.value">
-                            <input type="text"  id="lap-t-btntx" name="lbpdf_ap[color_btn_texto]"
-                                   value="<?php echo esc_attr($cfg['color_btn_texto']); ?>"
-                                   oninput="document.getElementById('lap-c-btntx').value=this.value" maxlength="7">
                         </div>
                     </div>
 
@@ -708,17 +649,7 @@ class Flipbook_Apariencia {
         $rad   = intval($cfg['radio_bordes']);
         $sombra = ($cfg['sombra'] === '1');
 
-        // Aplica colores del tema primero, luego sobreescribe con los individuales
         $tema_slug = $cfg['tema_botones'] ?? 'oscuro';
-        $temas     = self::temas();
-        $paleta    = $temas[$tema_slug] ?? $temas['oscuro'];
-
-        $defaults  = self::defaults();
-        // Si el usuario dejó el color igual al default, usa el tema
-        $barra = ($cfg['color_barra']     !== $defaults['color_barra'])     ? $cfg['color_barra']     : $paleta['barra'];
-        $btn   = ($cfg['color_botones']   !== $defaults['color_botones'])   ? $cfg['color_botones']   : $paleta['botones'];
-        $btntx = ($cfg['color_btn_texto'] !== $defaults['color_btn_texto']) ? $cfg['color_btn_texto'] : $paleta['texto'];
-        $hover = $paleta['hover'];
 
         // Tema transparente: el CSS de visor.css maneja todo el glassmorphism via clase
         // lbpdf-tema-transparente. El CSS inline sobreescribiría con colores sólidos.
@@ -743,17 +674,10 @@ class Flipbook_Apariencia {
                 . '#fbm-wrap-' . $post_id . ' .fbm-visor-wrap,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-visor,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-cargando,'
-                . '#fbm-wrap-' . $post_id . ' .fbm-controles,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-info-bar,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-panel-miniaturas,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-search-resultados{background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}'
                 . '#fbm-wrap-' . $post_id . ' .fbm-panel-miniaturas.fbm-miniaturas--visible{border-color:transparent!important;}'
-                . '#fbm-wrap-' . $post_id . ' .fbm-btn{background:rgba(255,255,255,0.78)!important;border-color:rgba(15,23,42,0.10)!important;color:#0f172a!important;box-shadow:none!important;}'
-                . '#fbm-wrap-' . $post_id . ' .fbm-btn:hover{background:rgba(255,255,255,0.94)!important;border-color:rgba(15,23,42,0.16)!important;color:#020617!important;}'
-                . '#fbm-wrap-' . $post_id . ' .fbm-btn--activo,'
-                . '#fbm-wrap-' . $post_id . ' .fbm-btn-fs,'
-                . '#fbm-wrap-' . $post_id . ' .fbm-btn-fs.fs-activo{background:rgba(96,165,250,0.14)!important;border-color:rgba(59,130,246,0.28)!important;color:#1d4ed8!important;}'
-                . '#fbm-wrap-' . $post_id . ' .fbm-pagina-info,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-zoom-nivel,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-miniaturas-titulo{color:rgba(15,23,42,0.62)!important;opacity:1!important;}'
                 . '#fbm-wrap-' . $post_id . ' .fbm-miniatura span{background:rgba(255,255,255,0.88)!important;color:rgba(15,23,42,0.72)!important;}'
@@ -761,16 +685,12 @@ class Flipbook_Apariencia {
                 . '#fbm-wrap-' . $post_id . ' .fbm-progreso-fill{opacity:0.72!important;}'
             : '';
 
-        $barra_css = $tipo === 'sin_fondo' ? 'transparent' : $barra;
         $sombra_css = $sombra ? 'box-shadow:0 10px 26px rgba(0,0,0,.18)' : 'box-shadow:none';
 
         return '<style>'
             . '#fbm-wrap-' . $post_id . '{border-radius:' . $rad . 'px;' . $sombra_css . '}'
             . '#fbm-wrap-' . $post_id . ' .fbm-visor,'
             . '#fbm-wrap-' . $post_id . ' .fbm-cargando{' . $fondo . '}'
-            . '#fbm-wrap-' . $post_id . ' .fbm-controles{background:' . $barra_css . '}'
-            . '#fbm-wrap-' . $post_id . ' .fbm-btn{background:' . $btn . '!important;color:' . $btntx . '!important;}'
-            . '#fbm-wrap-' . $post_id . ' .fbm-btn:hover{background:' . $hover . '!important;}'
             . $transparencia_css
             . '</style>';
     }

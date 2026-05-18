@@ -5,6 +5,11 @@
     box-shadow: none !important;
 }
 
+.fbm-contenedor-externo,
+.fbm-contenedor-externo * {
+    box-sizing: border-box;
+}
+
 .fbm-info-bar {
     display: flex;
     flex-wrap: wrap;
@@ -123,7 +128,7 @@
     left: 50%;
     bottom: 16px;
     z-index: 50;
-    display: flex;
+    display: flex !important;
     align-items: center;
     gap: 8px;
     transform: translateX(-50%);
@@ -133,6 +138,10 @@
     background: rgba(15, 23, 42, 0.82);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
     backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto;
 }
 
 .fbm-btn {
@@ -142,12 +151,15 @@
     width: 38px;
     height: 38px;
     min-width: 38px;
+    padding: 0 !important;
+    margin: 0 !important;
     border: 0;
     border-radius: 6px;
     color: #f8fafc;
     background: transparent;
     cursor: pointer;
     text-decoration: none;
+    line-height: 1 !important;
     transition: background-color 160ms ease, color 160ms ease;
     opacity: 1;
     visibility: visible;
@@ -162,6 +174,7 @@
 }
 
 .fbm-btn svg {
+    display: block !important;
     width: 22px;
     height: 22px;
     fill: none;
@@ -230,18 +243,18 @@
 }
 
 .lbpdf-tema-claro .fbm-controles {
-    border-color: rgba(148, 163, 184, 0.35);
-    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.82);
 }
 
 .lbpdf-tema-claro .fbm-btn,
 .lbpdf-tema-claro .fbm-pagina-info {
-    color: #111827;
+    color: #f8fafc;
 }
 
 .lbpdf-tema-claro .fbm-btn:hover,
 .lbpdf-tema-claro .fbm-btn:focus-visible {
-    background: rgba(15, 23, 42, 0.08);
+    background: rgba(255, 255, 255, 0.12);
 }
 
 @keyframes fbm-spin {
