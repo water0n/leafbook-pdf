@@ -15,6 +15,14 @@ class Flipbook_Taxonomy {
         add_action( 'restrict_manage_posts',               array( $this, 'filtro_en_lista'     ) );
         add_filter( 'manage_flipbook_posts_columns',       array( $this, 'agregar_columna'     ) );
         add_action( 'manage_flipbook_posts_custom_column', array( $this, 'render_columna'      ), 10, 2 );
+        add_action( self::SLUG . '_pre_add_form',          array( $this, 'render_ayuda_shortcodes' ) );
+        add_action( self::SLUG . '_edit_form_fields',      array( $this, 'render_shortcode_edicion' ), 10, 2 );
+        add_filter( 'manage_edit-' . self::SLUG . '_columns', array( $this, 'agregar_columna_shortcode_terms' ) );
+        add_filter( 'manage_' . self::SLUG . '_custom_column', array( $this, 'render_columna_shortcode_terms' ), 10, 3 );
+        add_action( 'admin_head-edit-tags.php',            array( $this, 'estilos_admin_grupos' ) );
+        add_action( 'admin_head-term.php',                 array( $this, 'estilos_admin_grupos' ) );
+        add_action( 'admin_footer-edit-tags.php',          array( $this, 'scripts_admin_grupos' ) );
+        add_action( 'admin_footer-term.php',               array( $this, 'scripts_admin_grupos' ) );
     }
 
     // ── Registro ─────────────────────────────────────────────────
@@ -169,5 +177,226 @@ class Flipbook_Taxonomy {
             $links[] = '<a href="'.esc_url($url).'" style="font-size:12px;color:#2271b1;">'.esc_html($g->name).'</a>';
         }
         echo implode(', ', $links);
+    }
+
+    // ── Ayuda y shortcodes por grupo ────────────────────────────
+    public function render_ayuda_shortcodes() {
+        if ( ! current_user_can( 'edit_posts' ) ) return;
+
+        $grupos = get_terms( array(
+            'taxonomy'   => self::SLUG,
+            'hide_empty' => false,
+            'orderby'    => 'name',
+            'order'      => 'ASC',
+        ) );
+        ?>
+        <div class="lbpdf-grupos-ayuda">
+            <div class="lbpdf-grupos-ayuda-head">
+                <div>
+                    <h2>Shortcodes por categoria/grupo</h2>
+                    <p>En LeafBook las categorias se administran como <strong>Grupos</strong>. Usa el slug del grupo para mostrar automaticamente el ultimo PDF publicado dentro de esa categoria.</p>
+                </div>
+                <a class="button button-primary" href="<?php echo esc_url( admin_url( 'post-new.php?post_type=flipbook' ) ); ?>">Agregar PDF</a>
+            </div>
+
+            <div class="lbpdf-grupos-ejemplos">
+                <div>
+                    <span>Shortcode recomendado</span>
+                    <code>[leafbook grupo="slug-del-grupo"]</code>
+                </div>
+                <div>
+                    <span>Alias disponible</span>
+                    <code>[leafbook categoria="slug-del-grupo"]</code>
+                </div>
+            </div>
+
+            <?php if ( ! empty( $grupos ) && ! is_wp_error( $grupos ) ) : ?>
+                <table class="widefat striped lbpdf-grupos-tabla">
+                    <thead>
+                        <tr>
+                            <th>Grupo</th>
+                            <th>Slug</th>
+                            <th>Ultimo PDF</th>
+                            <th>Shortcode</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ( $grupos as $grupo ) :
+                            $ultimo    = $this->ultimo_flipbook_por_grupo( $grupo->term_id );
+                            $shortcode = $this->shortcode_grupo( $grupo );
+                            ?>
+                            <tr>
+                                <td><strong><?php echo esc_html( $grupo->name ); ?></strong></td>
+                                <td><code><?php echo esc_html( $grupo->slug ); ?></code></td>
+                                <td>
+                                    <?php if ( $ultimo ) : ?>
+                                        <a href="<?php echo esc_url( get_edit_post_link( $ultimo->ID ) ); ?>"><?php echo esc_html( get_the_title( $ultimo->ID ) ); ?></a>
+                                    <?php else : ?>
+                                        <span class="lbpdf-muted">Sin PDFs publicados con archivo.</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <code class="lbpdf-term-sc"><?php echo esc_html( $shortcode ); ?></code>
+                                    <button type="button" class="button button-small lbpdf-copy-code" data-shortcode="<?php echo esc_attr( $shortcode ); ?>">Copiar</button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php else : ?>
+                <p class="lbpdf-grupos-vacio">Aun no hay grupos. Crea uno abajo; despues podras usar su shortcode aqui mismo.</p>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    public function render_shortcode_edicion( $term ) {
+        if ( ! $term || is_wp_error( $term ) ) return;
+
+        $shortcode = $this->shortcode_grupo( $term );
+        ?>
+        <tr class="form-field">
+            <th scope="row">Shortcode del grupo</th>
+            <td>
+                <code class="lbpdf-term-sc"><?php echo esc_html( $shortcode ); ?></code>
+                <button type="button" class="button button-small lbpdf-copy-code" data-shortcode="<?php echo esc_attr( $shortcode ); ?>">Copiar</button>
+                <p class="description">Muestra automaticamente el ultimo PDF publicado que pertenezca a este grupo.</p>
+            </td>
+        </tr>
+        <?php
+    }
+
+    public function agregar_columna_shortcode_terms( $columns ) {
+        $nuevo = array();
+        foreach ( $columns as $key => $label ) {
+            $nuevo[$key] = $label;
+            if ( $key === 'name' ) {
+                $nuevo['lbpdf_shortcode'] = 'Shortcode';
+            }
+        }
+
+        if ( ! isset( $nuevo['lbpdf_shortcode'] ) ) {
+            $nuevo['lbpdf_shortcode'] = 'Shortcode';
+        }
+
+        return $nuevo;
+    }
+
+    public function render_columna_shortcode_terms( $content, $column_name, $term_id ) {
+        if ( $column_name !== 'lbpdf_shortcode' ) {
+            return $content;
+        }
+
+        $term = get_term( $term_id, self::SLUG );
+        if ( ! $term || is_wp_error( $term ) ) {
+            return $content;
+        }
+
+        $shortcode = $this->shortcode_grupo( $term );
+        return '<code class="lbpdf-term-sc">' . esc_html( $shortcode ) . '</code> '
+            . '<button type="button" class="button button-small lbpdf-copy-code" data-shortcode="' . esc_attr( $shortcode ) . '">Copiar</button>';
+    }
+
+    public function estilos_admin_grupos() {
+        if ( ! $this->es_pantalla_grupos() ) return;
+        ?>
+        <style>
+            .lbpdf-grupos-ayuda { background:#fff; border:1px solid #dcdcde; border-radius:8px; padding:18px 20px; margin:14px 0 18px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+            .lbpdf-grupos-ayuda-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:14px; }
+            .lbpdf-grupos-ayuda h2 { margin:0 0 6px; font-size:18px; line-height:1.3; }
+            .lbpdf-grupos-ayuda p { margin:0; color:#50575e; max-width:760px; }
+            .lbpdf-grupos-ejemplos { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; margin:14px 0; }
+            .lbpdf-grupos-ejemplos > div { background:#f6f7f7; border:1px solid #e2e4e7; border-radius:6px; padding:10px 12px; }
+            .lbpdf-grupos-ejemplos span { display:block; color:#646970; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+            .lbpdf-grupos-ejemplos code,
+            .lbpdf-term-sc { display:inline-block; background:#1d2327; color:#a8d8ff; padding:5px 8px; border-radius:4px; font-size:12px; line-height:1.4; }
+            .lbpdf-grupos-tabla { margin-top:12px; }
+            .lbpdf-grupos-tabla td { vertical-align:middle; }
+            .lbpdf-muted,
+            .lbpdf-grupos-vacio { color:#787c82; }
+            .column-lbpdf_shortcode { width:280px; }
+            .lbpdf-copy-code { margin-left:6px !important; vertical-align:middle !important; }
+            @media (max-width: 782px) {
+                .lbpdf-grupos-ayuda-head { display:block; }
+                .lbpdf-grupos-ayuda-head .button { margin-top:12px; }
+                .column-lbpdf_shortcode { width:auto; }
+            }
+        </style>
+        <?php
+    }
+
+    public function scripts_admin_grupos() {
+        if ( ! $this->es_pantalla_grupos() ) return;
+        ?>
+        <script>
+        document.addEventListener('click', function(e) {
+            var btn = e.target.closest('.lbpdf-copy-code');
+            if (!btn) return;
+
+            e.preventDefault();
+            var text = btn.getAttribute('data-shortcode') || '';
+            var label = btn.textContent;
+            var done = function() {
+                btn.textContent = 'Copiado';
+                setTimeout(function(){ btn.textContent = label; }, 1800);
+            };
+            var fallback = function() {
+                var area = document.createElement('textarea');
+                area.value = text;
+                area.setAttribute('readonly', '');
+                area.style.position = 'fixed';
+                area.style.left = '-9999px';
+                document.body.appendChild(area);
+                area.select();
+                document.execCommand('copy');
+                document.body.removeChild(area);
+                done();
+            };
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done).catch(fallback);
+            } else {
+                fallback();
+            }
+        });
+        </script>
+        <?php
+    }
+
+    private function shortcode_grupo( $term ) {
+        return '[leafbook grupo="' . $term->slug . '"]';
+    }
+
+    private function ultimo_flipbook_por_grupo( $term_id ) {
+        $posts = get_posts( array(
+            'post_type'      => 'flipbook',
+            'post_status'    => 'publish',
+            'numberposts'    => 1,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'tax_query'      => array(
+                array(
+                    'taxonomy' => self::SLUG,
+                    'field'    => 'term_id',
+                    'terms'    => array( absint( $term_id ) ),
+                ),
+            ),
+            'meta_query'     => array(
+                array(
+                    'key'     => '_fbm_pdf_url',
+                    'value'   => '',
+                    'compare' => '!=',
+                ),
+            ),
+        ) );
+
+        return ! empty( $posts ) ? $posts[0] : null;
+    }
+
+    private function es_pantalla_grupos() {
+        if ( ! function_exists( 'get_current_screen' ) ) return false;
+
+        $screen = get_current_screen();
+        return $screen && isset( $screen->taxonomy ) && $screen->taxonomy === self::SLUG;
     }
 }

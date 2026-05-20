@@ -1,5 +1,5 @@
 === LeafBook PDF ===
-Version: 1.6.4
+Version: 1.6.5
 
 == ESTRUCTURA DEL PLUGIN ==
 
@@ -36,12 +36,35 @@ flipbook-manager/
 2. Escribe el título de tu revista
 3. En "Configuración del Flipbook" pega la URL de tu PDF
 4. Publica el flipbook
-5. Copia el shortcode que aparece: [flipbook id="X"]
+5. Copia el shortcode que aparece: [leafbook id="X"]
 6. Pega ese shortcode en cualquier página o entrada
+
+== SHORTCODE POR CATEGORIA / GRUPO ==
+
+LeafBook organiza las categorias como "Grupos".
+
+Para mostrar automaticamente el ultimo PDF publicado de un grupo:
+
+[leafbook grupo="slug-del-grupo"]
+
+Tambien funciona el alias:
+
+[leafbook categoria="slug-del-grupo"]
+
+Ejemplo:
+
+[leafbook grupo="revistas-2026"]
+
+El shortcode con ID sigue funcionando para mostrar un PDF exacto:
+
+[leafbook id="42"]
+
+En WordPress Admin -> LeafBook PDF -> Grupos puedes ver el shortcode listo para copiar de cada grupo.
 
 == ESTADO ==
 
 - CPT, admin, shortcode y bloque Gutenberg.
+- Shortcode por grupo/categoria para mostrar el ultimo PDF publicado de una categoria.
 - Lector PDF.js local sin dependencia de CDN.
 - Navegacion por botones, teclado y swipe movil.
 - Zoom de alta calidad por pinch o Ctrl/trackpad wheel.

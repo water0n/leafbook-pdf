@@ -1,7 +1,7 @@
 <?php
 /**
  * class-flipbook-shortcode.php
- * Shortcode [leafbook id="X"].
+ * Shortcode [leafbook id="X"] o [leafbook grupo="slug"].
  *
  * Renderiza un lector PDF simple basado en PDF.js. La lectura, el zoom y
  * pantalla completa viven en assets/js/visor.js.
@@ -25,9 +25,24 @@ class Flipbook_Shortcode {
     }
 
     public function render_shortcode( $atts ) {
-        $atts = shortcode_atts( array( 'id' => 0, 'ancho' => '', 'alto' => '' ), $atts, 'leafbook' );
-        $pid  = intval( $atts['id'] );
-        if ( $pid <= 0 ) return '<p style="color:red;">⚠️ LeafBook: falta el id. Uso: [leafbook id="42"]</p>';
+        $atts = shortcode_atts( array(
+            'id'          => 0,
+            'grupo'       => '',
+            'categoria'   => '',
+            'category'    => '',
+            'lbpdf_grupo' => '',
+            'ancho'       => '',
+            'alto'        => '',
+        ), $atts, 'leafbook' );
+
+        $pid = $this->resolver_pdf_id( $atts );
+        if ( is_wp_error( $pid ) ) {
+            return '<p style="color:orange;">⚠️ ' . esc_html( $pid->get_error_message() ) . '</p>';
+        }
+
+        if ( $pid <= 0 ) {
+            return '<p style="color:red;">⚠️ LeafBook: falta el id o grupo. Uso: [leafbook id="42"] o [leafbook grupo="revistas"]</p>';
+        }
 
         $post = get_post($pid);
         if ( !$post || $post->post_type !== 'flipbook' || $post->post_status !== 'publish' )
@@ -130,5 +145,86 @@ class Flipbook_Shortcode {
         </div><!-- .fbm-contenedor-externo -->
         <?php
         return ob_get_clean();
+    }
+
+    private function resolver_pdf_id( $atts ) {
+        $pid = intval( $atts['id'] );
+        if ( $pid > 0 ) {
+            return $pid;
+        }
+
+        $grupo = $this->obtener_atributo_grupo( $atts );
+        if ( $grupo === '' ) {
+            return 0;
+        }
+
+        return $this->obtener_ultimo_pdf_por_grupo( $grupo );
+    }
+
+    private function obtener_atributo_grupo( $atts ) {
+        foreach ( array( 'grupo', 'categoria', 'category', 'lbpdf_grupo' ) as $key ) {
+            if ( isset( $atts[$key] ) && trim( (string) $atts[$key] ) !== '' ) {
+                return sanitize_text_field( wp_unslash( $atts[$key] ) );
+            }
+        }
+
+        return '';
+    }
+
+    private function obtener_ultimo_pdf_por_grupo( $grupo ) {
+        $taxonomy = Flipbook_Taxonomy::SLUG;
+        $term     = false;
+
+        if ( is_numeric( $grupo ) ) {
+            $term = get_term( absint( $grupo ), $taxonomy );
+        }
+
+        if ( ! $term || is_wp_error( $term ) ) {
+            $term = get_term_by( 'slug', sanitize_title( $grupo ), $taxonomy );
+        }
+
+        if ( ! $term ) {
+            $term = get_term_by( 'name', $grupo, $taxonomy );
+        }
+
+        if ( ! $term || is_wp_error( $term ) ) {
+            return new WP_Error(
+                'lbpdf_grupo_no_encontrado',
+                sprintf( 'LeafBook: el grupo "%s" no existe.', $grupo )
+            );
+        }
+
+        $query = new WP_Query( array(
+            'post_type'           => 'flipbook',
+            'post_status'         => 'publish',
+            'posts_per_page'      => 1,
+            'orderby'             => 'date',
+            'order'               => 'DESC',
+            'ignore_sticky_posts' => true,
+            'no_found_rows'       => true,
+            'tax_query'           => array(
+                array(
+                    'taxonomy' => $taxonomy,
+                    'field'    => 'term_id',
+                    'terms'    => array( $term->term_id ),
+                ),
+            ),
+            'meta_query'          => array(
+                array(
+                    'key'     => '_fbm_pdf_url',
+                    'value'   => '',
+                    'compare' => '!=',
+                ),
+            ),
+        ) );
+
+        if ( empty( $query->posts ) ) {
+            return new WP_Error(
+                'lbpdf_grupo_sin_pdfs',
+                sprintf( 'LeafBook: no hay PDFs publicados con archivo configurado en el grupo "%s".', $term->name )
+            );
+        }
+
+        return (int) $query->posts[0]->ID;
     }
 }
