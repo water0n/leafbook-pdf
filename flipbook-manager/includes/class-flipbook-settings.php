@@ -59,6 +59,15 @@ class Flipbook_Settings {
         // Renombrar el primer submenú (que WordPress crea igual al menú padre)
         add_submenu_page( 'leafbook-pdf', 'LeafBook PDF', '📊 Inicio', 'edit_posts', 'leafbook-pdf', array( $this, 'render_pagina' ) );
 
+        // Grupos / categorias de LeafBook.
+        add_submenu_page(
+            'leafbook-pdf',
+            'Grupos — LeafBook PDF',
+            '🗂 Grupos',
+            'edit_posts',
+            'edit-tags.php?taxonomy=' . Flipbook_Taxonomy::SLUG . '&post_type=flipbook'
+        );
+
         // Ajustes
         add_submenu_page(
             'leafbook-pdf',

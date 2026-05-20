@@ -213,7 +213,8 @@ class Flipbook_Admin {
     // BOX 3: CÓMO INCRUSTAR (panel lateral)
     // ─────────────────────────────────────────────────────────
     public function box_incrustar( $post ) {
-        $id = $post->ID;
+        $id            = $post->ID;
+        $shortcode_pdf = '[leafbook id="' . $id . '"]';
         ?>
         <style>
         .lbpdf-sc   { background:#1d2327; color:#a8d8ff; padding:9px 12px; border-radius:6px; font-family:monospace; font-size:12px; word-break:break-all; margin-bottom:8px; }
@@ -224,7 +225,38 @@ class Flipbook_Admin {
         .lbpdf-id-badge { display:flex; align-items:center; justify-content:center; background:#f0f4ff; border:1px solid #c7d7fa; border-radius:6px; padding:8px 12px; margin-bottom:14px; text-align:center; }
         .lbpdf-id-num { font-size:26px; font-weight:800; color:#2271b1; font-family:monospace; }
         .lbpdf-id-lbl { font-size:10px; color:#787c82; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+        .lbpdf-grupo-item { margin-bottom:10px; }
+        .lbpdf-grupo-nom { display:block; font-size:12px; font-weight:600; color:#1d2327; margin-bottom:5px; }
+        .lbpdf-mini-note { font-size:11px; color:#9ca3af; margin:7px 0 0; line-height:1.4; }
         </style>
+        <script>
+        window.lbpdfCopiarTexto = window.lbpdfCopiarTexto || function(btn) {
+            var txt = btn.getAttribute('data-copy') || '';
+            var label = btn.getAttribute('data-label') || btn.textContent;
+            var done = function() {
+                btn.textContent = '✅ ¡Copiado!';
+                setTimeout(function(){ btn.textContent = label; }, 1800);
+            };
+            var fallback = function() {
+                var area = document.createElement('textarea');
+                area.value = txt;
+                area.setAttribute('readonly', '');
+                area.style.position = 'fixed';
+                area.style.left = '-9999px';
+                document.body.appendChild(area);
+                area.select();
+                document.execCommand('copy');
+                document.body.removeChild(area);
+                done();
+            };
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(txt).then(done).catch(fallback);
+            } else {
+                fallback();
+            }
+        };
+        </script>
 
         <!-- ID único -->
         <div class="lbpdf-id-badge">
@@ -237,11 +269,42 @@ class Flipbook_Admin {
         <!-- Shortcode -->
         <div class="lbpdf-sec">
             <p class="lbpdf-sec-t">Shortcode (WordPress)</p>
-            <div class="lbpdf-sc">[leafbook id="<?php echo $id; ?>"]</div>
-            <button class="lbpdf-copy" onclick="navigator.clipboard.writeText('[leafbook id=\'<?php echo $id; ?>\']');this.textContent='✅ ¡Copiado!';setTimeout(()=>this.textContent='📋 Copiar shortcode',1800)">
+            <div class="lbpdf-sc"><?php echo esc_html( $shortcode_pdf ); ?></div>
+            <button type="button" class="lbpdf-copy" data-copy="<?php echo esc_attr( $shortcode_pdf ); ?>" data-label="📋 Copiar shortcode" onclick="lbpdfCopiarTexto(this)">
                 📋 Copiar shortcode
             </button>
         </div>
+
+        <!-- Shortcodes por grupo -->
+        <?php
+        $grupos_pdf = wp_get_post_terms( $id, Flipbook_Taxonomy::SLUG );
+        if ( ! empty( $grupos_pdf ) && ! is_wp_error( $grupos_pdf ) ) :
+        ?>
+        <div class="lbpdf-sec">
+            <p class="lbpdf-sec-t">Shortcode por grupo</p>
+            <?php foreach ( $grupos_pdf as $grupo ) :
+                $shortcode_grupo = '[leafbook grupo="' . $grupo->slug . '"]';
+                ?>
+                <div class="lbpdf-grupo-item">
+                    <span class="lbpdf-grupo-nom"><?php echo esc_html( $grupo->name ); ?></span>
+                    <div class="lbpdf-sc"><?php echo esc_html( $shortcode_grupo ); ?></div>
+                    <button type="button" class="lbpdf-copy" data-copy="<?php echo esc_attr( $shortcode_grupo ); ?>" data-label="📋 Copiar shortcode de grupo" onclick="lbpdfCopiarTexto(this)">
+                        📋 Copiar shortcode de grupo
+                    </button>
+                </div>
+            <?php endforeach; ?>
+            <p class="lbpdf-mini-note">
+                Este shortcode muestra automaticamente el ultimo PDF publicado de ese grupo.
+            </p>
+        </div>
+        <?php else : ?>
+        <div class="lbpdf-sec">
+            <p class="lbpdf-sec-t">Shortcode por grupo</p>
+            <p class="lbpdf-mini-note">
+                Asigna este PDF a un grupo para ver aqui el shortcode dinamico por categoria.
+            </p>
+        </div>
+        <?php endif; ?>
 
         <!-- iFrame -->
         <div class="lbpdf-sec">
@@ -270,7 +333,7 @@ class Flipbook_Admin {
                 . '</iframe>';
             ?>
             <div class="lbpdf-sc"><?php echo esc_html($iframe); ?></div>
-            <button class="lbpdf-copy" onclick="navigator.clipboard.writeText(<?php echo json_encode($iframe); ?>);this.textContent='✅ ¡Copiado!';setTimeout(()=>this.textContent='📋 Copiar iframe',1800)">
+            <button type="button" class="lbpdf-copy" data-copy="<?php echo esc_attr( $iframe ); ?>" data-label="📋 Copiar iframe" onclick="lbpdfCopiarTexto(this)">
                 📋 Copiar iframe
             </button>
             <p style="font-size:11px;color:#9ca3af;margin:8px 0 0;">

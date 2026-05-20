@@ -1,5 +1,5 @@
 === LeafBook PDF ===
-Version: 1.6.5
+Version: 1.6.6
 
 == ESTRUCTURA DEL PLUGIN ==
 
@@ -60,6 +60,7 @@ El shortcode con ID sigue funcionando para mostrar un PDF exacto:
 [leafbook id="42"]
 
 En WordPress Admin -> LeafBook PDF -> Grupos puedes ver el shortcode listo para copiar de cada grupo.
+Al editar un PDF, el panel "Como incrustar" tambien muestra los shortcodes de los grupos asignados a ese PDF.
 
 == ESTADO ==
 

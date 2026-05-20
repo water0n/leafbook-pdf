@@ -15,7 +15,7 @@ class Flipbook_Taxonomy {
         add_action( 'restrict_manage_posts',               array( $this, 'filtro_en_lista'     ) );
         add_filter( 'manage_flipbook_posts_columns',       array( $this, 'agregar_columna'     ) );
         add_action( 'manage_flipbook_posts_custom_column', array( $this, 'render_columna'      ), 10, 2 );
-        add_action( self::SLUG . '_pre_add_form',          array( $this, 'render_ayuda_shortcodes' ) );
+        add_action( 'admin_notices',                       array( $this, 'render_ayuda_shortcodes' ) );
         add_action( self::SLUG . '_edit_form_fields',      array( $this, 'render_shortcode_edicion' ), 10, 2 );
         add_filter( 'manage_edit-' . self::SLUG . '_columns', array( $this, 'agregar_columna_shortcode_terms' ) );
         add_filter( 'manage_' . self::SLUG . '_custom_column', array( $this, 'render_columna_shortcode_terms' ), 10, 3 );
@@ -182,6 +182,7 @@ class Flipbook_Taxonomy {
     // ── Ayuda y shortcodes por grupo ────────────────────────────
     public function render_ayuda_shortcodes() {
         if ( ! current_user_can( 'edit_posts' ) ) return;
+        if ( ! $this->es_lista_grupos() ) return;
 
         $grupos = get_terms( array(
             'taxonomy'   => self::SLUG,
@@ -398,5 +399,12 @@ class Flipbook_Taxonomy {
 
         $screen = get_current_screen();
         return $screen && isset( $screen->taxonomy ) && $screen->taxonomy === self::SLUG;
+    }
+
+    private function es_lista_grupos() {
+        if ( ! $this->es_pantalla_grupos() ) return false;
+
+        $screen = get_current_screen();
+        return $screen && isset( $screen->base ) && $screen->base === 'edit-tags';
     }
 }
