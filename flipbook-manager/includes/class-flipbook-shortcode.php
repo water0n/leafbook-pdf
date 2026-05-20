@@ -79,8 +79,11 @@ class Flipbook_Shortcode {
             'tema'      => $tema,
         ));
 
+        $uid = function_exists( 'wp_unique_id' )
+            ? wp_unique_id( 'fbm-' . $pid . '-' )
+            : 'fbm-' . $pid . '-' . wp_rand( 1000, 999999 );
         // ── CSS inline con apariencia individual ──
-        $css_inline = Flipbook_Apariencia::css_inline($pid, $cfg);
+        $css_inline = Flipbook_Apariencia::css_inline($uid, $cfg);
 
         // ── Info: título, categoría, autor ──
         $titulo     = $cfg['mostrar_titulo']    === '1' ? get_the_title($pid) : '';
@@ -92,7 +95,7 @@ class Flipbook_Shortcode {
         ob_start();
         echo $css_inline;
         ?>
-        <div class="fbm-contenedor-externo lbpdf-tema-<?php echo esc_attr($tema); ?>" id="fbm-wrap-<?php echo $pid; ?>" style="max-width:<?php echo $ancho; ?>px;margin:0 auto;">
+        <div class="fbm-contenedor-externo lbpdf-tema-<?php echo esc_attr($tema); ?>" id="fbm-wrap-<?php echo esc_attr($uid); ?>" style="max-width:<?php echo $ancho; ?>px;margin:0 auto;">
 
             <?php // ── Barra de info (opcional) ── ?>
             <?php if ($mostrar_info): ?>
@@ -106,32 +109,35 @@ class Flipbook_Shortcode {
             </div>
             <?php endif; ?>
 
-            <div class="fbm-visor-wrap" id="fbm-visor-wrap-<?php echo $pid; ?>">
-                <div id="fbm-visor-<?php echo $pid; ?>" class="fbm-visor"
+            <div class="fbm-visor-wrap" id="fbm-visor-wrap-<?php echo esc_attr($uid); ?>">
+                <div id="fbm-visor-<?php echo esc_attr($uid); ?>" class="fbm-visor"
                      data-id="<?php echo $pid; ?>"
+                     data-pdf-id="<?php echo $pid; ?>"
+                     data-instance-id="<?php echo esc_attr($uid); ?>"
                      data-pdf="<?php echo esc_url($proxy_url); ?>"
+                     data-worker-src="<?php echo esc_url( FBM_PLUGIN_URL . 'assets/js/pdf.worker.min.js?v=' . FBM_VERSION ); ?>"
                      data-ancho="<?php echo $ancho; ?>"
                      data-alto="<?php echo $alto; ?>"
                      style="--fbm-height:<?php echo $alto; ?>px;" tabindex="0">
-                    <div class="fbm-stage" id="fbm-stage-<?php echo $pid; ?>">
+                    <div class="fbm-stage" id="fbm-stage-<?php echo esc_attr($uid); ?>">
                         <button class="fbm-page-hotspot fbm-page-hotspot-prev" data-accion="anterior" data-id="<?php echo $pid; ?>" aria-label="Pagina anterior"></button>
-                        <div class="fbm-page-shell" id="fbm-page-shell-<?php echo $pid; ?>">
-                            <canvas class="fbm-page-canvas" id="fbm-canvas-<?php echo $pid; ?>"></canvas>
-                            <div class="fbm-link-layer" id="fbm-links-<?php echo $pid; ?>"></div>
+                        <div class="fbm-page-shell" id="fbm-page-shell-<?php echo esc_attr($uid); ?>">
+                            <canvas class="fbm-page-canvas" id="fbm-canvas-<?php echo esc_attr($uid); ?>"></canvas>
+                            <div class="fbm-link-layer" id="fbm-links-<?php echo esc_attr($uid); ?>"></div>
                         </div>
                         <button class="fbm-page-hotspot fbm-page-hotspot-next" data-accion="siguiente" data-id="<?php echo $pid; ?>" aria-label="Pagina siguiente"></button>
                     </div>
 
-                    <div class="fbm-cargando" id="fbm-cargando-<?php echo $pid; ?>">
+                    <div class="fbm-cargando" id="fbm-cargando-<?php echo esc_attr($uid); ?>">
                         <div class="fbm-spinner"></div>
                         <p class="fbm-cargando-texto">Preparando PDF...</p>
                     </div>
 
-                    <div class="fbm-controles" id="fbm-controles-<?php echo $pid; ?>">
+                    <div class="fbm-controles" id="fbm-controles-<?php echo esc_attr($uid); ?>">
                         <button class="fbm-btn" data-accion="anterior" data-id="<?php echo $pid; ?>" title="Pagina anterior" aria-label="Pagina anterior">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
                         </button>
-                        <span class="fbm-pagina-info" id="fbm-info-<?php echo $pid; ?>">...</span>
+                        <span class="fbm-pagina-info" id="fbm-info-<?php echo esc_attr($uid); ?>">...</span>
                         <button class="fbm-btn" data-accion="siguiente" data-id="<?php echo $pid; ?>" title="Pagina siguiente" aria-label="Pagina siguiente">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
                         </button>

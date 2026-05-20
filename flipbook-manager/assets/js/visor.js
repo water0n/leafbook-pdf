@@ -7,20 +7,21 @@
         return Math.max(min, Math.min(max, value));
     }
 
-    function getConfig(id, node) {
-        var globalConfig = window['fbmData_' + id] || {};
+    function getConfig(pdfId, node) {
+        var globalConfig = window['fbmData_' + pdfId] || {};
         return {
-            id: id,
-            pdfUrl: globalConfig.pdfUrl || node.getAttribute('data-pdf'),
-            workerSrc: globalConfig.workerSrc || '',
-            height: Number(globalConfig.alto || node.getAttribute('data-alto') || 640)
+            id: pdfId,
+            pdfUrl: node.getAttribute('data-pdf') || globalConfig.pdfUrl,
+            workerSrc: node.getAttribute('data-worker-src') || globalConfig.workerSrc || '',
+            height: Number(node.getAttribute('data-alto') || globalConfig.alto || 640)
         };
     }
 
     function LeafBookViewer(node) {
         this.node = node;
-        this.id = node.getAttribute('data-id');
-        this.config = getConfig(this.id, node);
+        this.id = node.getAttribute('data-instance-id') || node.getAttribute('data-id');
+        this.pdfId = node.getAttribute('data-pdf-id') || node.getAttribute('data-id');
+        this.config = getConfig(this.pdfId, node);
         this.pdf = null;
         this.page = null;
         this.pageNumber = 1;
@@ -44,13 +45,15 @@
         this.canvas = node.querySelector('.fbm-page-canvas');
         this.links = node.querySelector('.fbm-link-layer');
         this.loader = node.querySelector('.fbm-cargando');
-        this.info = document.getElementById('fbm-info-' + this.id);
+        this.info = node.querySelector('.fbm-pagina-info');
         this.ctx = this.canvas.getContext('2d', { alpha: false });
 
         this.onResize = this.debounce(this.render.bind(this), 120);
     }
 
     LeafBookViewer.prototype.init = function () {
+        this.node.setAttribute('data-leafbook-ready', '1');
+
         if (!window.pdfjsLib) {
             this.showError('PDF.js no esta disponible.');
             return;
@@ -583,23 +586,72 @@
         };
     };
 
-    function init() {
-        var nodes = document.querySelectorAll('.fbm-visor[data-id]');
+    function init(root) {
+        root = root || document;
+
+        var nodes = root.matches && root.matches('.fbm-visor[data-id]')
+            ? [root]
+            : root.querySelectorAll('.fbm-visor[data-id]');
+
         nodes.forEach(function (node) {
-            var id = node.getAttribute('data-id');
-            if (instances[id]) {
+            if (node.getAttribute('data-leafbook-ready') === '1') {
                 return;
             }
 
+            var id = node.getAttribute('data-instance-id') || node.getAttribute('data-id');
             instances[id] = new LeafBookViewer(node);
             instances[id].init();
         });
     }
 
+    function observeDynamicShortcodes() {
+        if (!window.MutationObserver || !document.documentElement) {
+            return;
+        }
+
+        var timer = null;
+        var observer = new MutationObserver(function (mutations) {
+            var shouldInit = false;
+
+            mutations.forEach(function (mutation) {
+                mutation.addedNodes.forEach(function (node) {
+                    if (shouldInit || node.nodeType !== 1) {
+                        return;
+                    }
+
+                    if (
+                        (node.matches && node.matches('.fbm-visor[data-id]')) ||
+                        (node.querySelector && node.querySelector('.fbm-visor[data-id]'))
+                    ) {
+                        shouldInit = true;
+                    }
+                });
+            });
+
+            if (!shouldInit) {
+                return;
+            }
+
+            clearTimeout(timer);
+            timer = setTimeout(function () {
+                init();
+            }, 80);
+        });
+
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true
+        });
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', function () {
+            init();
+            observeDynamicShortcodes();
+        });
     } else {
         init();
+        observeDynamicShortcodes();
     }
 
     window.LeafBookViewer = {

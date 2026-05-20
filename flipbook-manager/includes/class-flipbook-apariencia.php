@@ -40,8 +40,8 @@ class Flipbook_Apariencia {
             'tema_botones'     => 'oscuro',   // oscuro | claro | azul | verde | rojo | transparente
             // Apariencia visual
             'fondo_tipo'       => 'color',
-            'fondo_color'      => '#1a2234',
-            'fondo_color2'     => '#111827',
+            'fondo_color'      => '#f3f4f6',
+            'fondo_color2'     => '#e5e7eb',
             'fondo_imagen_url' => '',
             'color_barra'      => '#0f172a',
             'color_botones'    => '#2a3547',
@@ -651,6 +651,10 @@ class Flipbook_Apariencia {
 
         $tema_slug = $cfg['tema_botones'] ?? 'oscuro';
 
+        if ( $tipo === 'color' && in_array( strtolower( $c1 ), array( '#1a2234', '#111827', '#0f172a' ), true ) ) {
+            $c1 = '#f3f4f6';
+        }
+
         // Tema transparente: el CSS de visor.css maneja todo el glassmorphism via clase
         // lbpdf-tema-transparente. El CSS inline sobreescribiría con colores sólidos.
         if ( $tema_slug === 'transparente' && $tipo !== 'sin_fondo' ) {
@@ -659,6 +663,7 @@ class Flipbook_Apariencia {
                 . '#fbm-wrap-' . $post_id . '.fbm-contenedor-externo{background:transparent!important;}'
                 . '#fbm-wrap-' . $post_id . ' .fbm-visor-wrap,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-visor,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-stage,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-cargando{background:transparent!important;}'
                 . '</style>';
         }
@@ -673,6 +678,7 @@ class Flipbook_Apariencia {
                 . '#fbm-wrap-' . $post_id . ' .fbm-area-principal,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-visor-wrap,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-visor,'
+                . '#fbm-wrap-' . $post_id . ' .fbm-stage,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-cargando,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-info-bar,'
                 . '#fbm-wrap-' . $post_id . ' .fbm-panel-miniaturas,'
@@ -690,6 +696,7 @@ class Flipbook_Apariencia {
         return '<style>'
             . '#fbm-wrap-' . $post_id . '{border-radius:' . $rad . 'px;' . $sombra_css . '}'
             . '#fbm-wrap-' . $post_id . ' .fbm-visor,'
+            . '#fbm-wrap-' . $post_id . ' .fbm-stage,'
             . '#fbm-wrap-' . $post_id . ' .fbm-cargando{' . $fondo . '}'
             . $transparencia_css
             . '</style>';

@@ -41,7 +41,7 @@
     min-height: 360px;
     overflow: hidden;
     border-radius: 8px;
-    background: #111827;
+    background: #f3f4f6;
     box-shadow: none;
     outline: none;
     touch-action: none;
@@ -60,7 +60,7 @@
     overflow: auto;
     overscroll-behavior: contain;
     padding: 16px;
-    background: #111827;
+    background: #f3f4f6;
     cursor: default;
     -webkit-overflow-scrolling: touch;
     scrollbar-gutter: stable both-edges;
@@ -133,10 +133,10 @@
     gap: 8px;
     transform: translateX(-50%);
     padding: 7px;
-    border: 1px solid rgba(148, 163, 184, 0.25);
+    border: 1px solid rgba(148, 163, 184, 0.2);
     border-radius: 8px;
-    background: rgba(15, 23, 42, 0.82);
-    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+    background: rgba(15, 23, 42, 0.66);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     opacity: 1 !important;
@@ -155,7 +155,7 @@
     margin: 0 !important;
     border: 0;
     border-radius: 6px;
-    color: #f8fafc;
+    color: rgba(248, 250, 252, 0.9);
     background: transparent;
     cursor: pointer;
     text-decoration: none;
@@ -169,7 +169,7 @@
 
 .fbm-btn:hover,
 .fbm-btn:focus-visible {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.1);
     outline: none;
 }
 
@@ -196,7 +196,7 @@
 .fbm-pagina-info {
     min-width: 74px;
     padding: 0 8px;
-    color: #f8fafc;
+    color: rgba(248, 250, 252, 0.9);
     font-size: 14px;
     font-variant-numeric: tabular-nums;
     line-height: 38px;
@@ -213,8 +213,8 @@
     align-items: center;
     justify-content: center;
     gap: 14px;
-    background: #111827;
-    color: #f8fafc;
+    background: #f3f4f6;
+    color: #374151;
 }
 
 .fbm-visor.is-ready .fbm-cargando {
@@ -224,8 +224,8 @@
 .fbm-spinner {
     width: 34px;
     height: 34px;
-    border: 3px solid rgba(255, 255, 255, 0.25);
-    border-top-color: #ffffff;
+    border: 3px solid rgba(15, 23, 42, 0.16);
+    border-top-color: #64748b;
     border-radius: 999px;
     animation: fbm-spin 760ms linear infinite;
 }
@@ -238,13 +238,13 @@
 .lbpdf-tema-claro .fbm-visor,
 .lbpdf-tema-claro .fbm-stage,
 .lbpdf-tema-claro .fbm-cargando {
-    background: #e5e7eb;
+    background: #f3f4f6;
     color: #111827;
 }
 
 .lbpdf-tema-claro .fbm-controles {
-    border-color: rgba(148, 163, 184, 0.25);
-    background: rgba(15, 23, 42, 0.82);
+    border-color: rgba(148, 163, 184, 0.2);
+    background: rgba(15, 23, 42, 0.66);
 }
 
 .lbpdf-tema-claro .fbm-btn,

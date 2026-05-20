@@ -244,11 +244,11 @@ class Flipbook_Settings {
                     </tr>
                     <tr id="lbpdf-fila-c1" style="<?php echo $tipo === 'sin_fondo' ? 'display:none' : ''; ?>">
                         <th>Color principal</th>
-                        <td><input type="color" name="<?php echo self::OPCION; ?>[fondo_color]" value="<?php echo esc_attr($this->val('fondo_color','#1a2234')); ?>"></td>
+                        <td><input type="color" name="<?php echo self::OPCION; ?>[fondo_color]" value="<?php echo esc_attr($this->val('fondo_color','#f3f4f6')); ?>"></td>
                     </tr>
                     <tr id="lbpdf-fila-c2" style="<?php echo $tipo !== 'degradado' ? 'display:none' : ''; ?>">
                         <th>Color secundario</th>
-                        <td><input type="color" name="<?php echo self::OPCION; ?>[fondo_color2]" value="<?php echo esc_attr($this->val('fondo_color2','#111827')); ?>"></td>
+                        <td><input type="color" name="<?php echo self::OPCION; ?>[fondo_color2]" value="<?php echo esc_attr($this->val('fondo_color2','#e5e7eb')); ?>"></td>
                     </tr>
                     <tr id="lbpdf-fila-img" style="<?php echo $tipo !== 'imagen' ? 'display:none' : ''; ?>">
                         <th>URL de imagen de fondo</th>
@@ -402,11 +402,15 @@ class Flipbook_Settings {
         if ( empty($o) ) return;
 
         $tipo  = $this->val('fondo_tipo',  'color');
-        $c1    = $this->val('fondo_color', '#1a2234');
-        $c2    = $this->val('fondo_color2','#111827');
+        $c1    = $this->val('fondo_color', '#f3f4f6');
+        $c2    = $this->val('fondo_color2','#e5e7eb');
         $img   = $this->val('fondo_imagen_url','');
         $rad   = intval($this->val('radio_bordes','12'));
         $sombra = $this->val('sombra','1') === '1';
+
+        if ( $tipo === 'color' && in_array( strtolower( $c1 ), array( '#1a2234', '#111827', '#0f172a' ), true ) ) {
+            $c1 = '#f3f4f6';
+        }
 
         if      ($tipo === 'degradado')         $fondo = 'background:linear-gradient(135deg,' . $c1 . ',' . $c2 . ');';
         elseif  ($tipo === 'imagen' && $img)    $fondo = 'background:url(' . esc_url($img) . ') center/cover no-repeat; background-color:' . $c1 . ';';
@@ -414,14 +418,14 @@ class Flipbook_Settings {
         else                                    $fondo = 'background:' . $c1 . ';';
 
         $transparencia_css = $tipo === 'sin_fondo'
-            ? '.fbm-contenedor-externo,.fbm-area-principal,.fbm-visor-wrap,.fbm-visor,.fbm-cargando,.fbm-info-bar,.fbm-panel-miniaturas,.fbm-search-resultados{background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}.fbm-panel-miniaturas.fbm-miniaturas--visible{border-color:transparent!important;}.fbm-zoom-nivel,.fbm-miniaturas-titulo{color:rgba(15,23,42,0.62)!important;opacity:1!important;}.fbm-miniatura span{background:rgba(255,255,255,0.88)!important;color:rgba(15,23,42,0.72)!important;}.fbm-progreso-barra{background:rgba(15,23,42,0.08)!important;}.fbm-progreso-fill{opacity:0.72!important;}'
+            ? '.fbm-contenedor-externo,.fbm-area-principal,.fbm-visor-wrap,.fbm-visor,.fbm-stage,.fbm-cargando,.fbm-info-bar,.fbm-panel-miniaturas,.fbm-search-resultados{background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}.fbm-panel-miniaturas.fbm-miniaturas--visible{border-color:transparent!important;}.fbm-zoom-nivel,.fbm-miniaturas-titulo{color:rgba(15,23,42,0.62)!important;opacity:1!important;}.fbm-miniatura span{background:rgba(255,255,255,0.88)!important;color:rgba(15,23,42,0.72)!important;}.fbm-progreso-barra{background:rgba(15,23,42,0.08)!important;}.fbm-progreso-fill{opacity:0.72!important;}'
             : '';
 
         $sombra_css = $sombra ? 'box-shadow:0 20px 60px rgba(0,0,0,.45);' : 'box-shadow:none;';
 
         echo '<style id="lbpdf-estilos">
 .fbm-contenedor-externo{border-radius:' . $rad . 'px!important;' . $sombra_css . '}
-.fbm-visor,.fbm-cargando{' . $fondo . '}
+.fbm-visor,.fbm-stage,.fbm-cargando{' . $fondo . '}
 ' . $transparencia_css . '
 </style>' . "\n";
     }
@@ -436,8 +440,8 @@ class Flipbook_Settings {
 
         return array(
             'fondo_tipo'       => $fondo_tipo,
-            'fondo_color'      => sanitize_hex_color(   $i['fondo_color']      ?? '#1a2234' ),
-            'fondo_color2'     => sanitize_hex_color(   $i['fondo_color2']     ?? '#111827' ),
+            'fondo_color'      => sanitize_hex_color(   $i['fondo_color']      ?? '#f3f4f6' ),
+            'fondo_color2'     => sanitize_hex_color(   $i['fondo_color2']     ?? '#e5e7eb' ),
             'fondo_imagen_url' => esc_url_raw(          $i['fondo_imagen_url'] ?? ''        ),
             'color_barra'      => sanitize_hex_color(   $i['color_barra']      ?? '#0f172a' ),
             'color_botones'    => sanitize_hex_color(   $i['color_botones']    ?? '#2a3547' ),

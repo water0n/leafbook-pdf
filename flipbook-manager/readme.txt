@@ -1,5 +1,5 @@
 === LeafBook PDF ===
-Version: 1.6.6
+Version: 1.6.8
 
 == ESTRUCTURA DEL PLUGIN ==
 
@@ -66,6 +66,8 @@ Al editar un PDF, el panel "Como incrustar" tambien muestra los shortcodes de lo
 
 - CPT, admin, shortcode y bloque Gutenberg.
 - Shortcode por grupo/categoria para mostrar el ultimo PDF publicado de una categoria.
+- Soporte para varias instancias del mismo PDF en una pagina y carga dinamica en Elementor.
+- Fondo del visor en gris claro y controles flotantes mas suaves.
 - Lector PDF.js local sin dependencia de CDN.
 - Navegacion por botones, teclado y swipe movil.
 - Zoom de alta calidad por pinch o Ctrl/trackpad wheel.
